@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "NYCU Portal Auto-Login",
+  "version": "1.0",
+  "description": "Automatically fills and submits credentials on NYCU Portal.",
+  "permissions": ["storage"],
+  "options_page": "options.html",
+  "action": {
+    "default_title": "NYCU Portal Auto-Login",
+    "default_popup": "options.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://portal.nycu.edu.tw/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
