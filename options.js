@@ -1,8 +1,18 @@
+// EZE3 | Premium Portal Automation Configuration
 document.addEventListener('DOMContentLoaded', () => {
     const usernameInput = document.getElementById('username');
     const passwordInput = document.getElementById('password');
     const saveBtn = document.getElementById('save');
-    const message = document.getElementById('message');
+    const messageContainer = document.getElementById('message');
+
+    const showMessage = (text, type = 'success') => {
+        messageContainer.textContent = text;
+        messageContainer.className = `message ${type}`;
+        messageContainer.style.display = 'block';
+        setTimeout(() => {
+            messageContainer.style.display = 'none';
+        }, 3000);
+    };
 
     // Load saved credentials
     chrome.storage.local.get(['nycu_username', 'nycu_password'], (result) => {
@@ -14,28 +24,32 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Save credentials
+    // Save credentials with validation
     saveBtn.addEventListener('click', () => {
-        const username = usernameInput.value;
-        const password = passwordInput.value;
+        const username = usernameInput.value.trim();
+        const password = passwordInput.value.trim();
 
         if (!username || !password) {
-            message.textContent = 'Please enter both username and password.';
-            message.style.color = '#f5222d';
-            message.style.display = 'block';
+            showMessage('Please enter both student ID and portal password.', 'error');
             return;
         }
+
+        // Add visual feedback
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Deploying...';
 
         chrome.storage.local.set({
             nycu_username: username,
             nycu_password: password
         }, () => {
-            message.textContent = 'Credentials saved successfully!';
-            message.className = 'message success';
-            message.style.display = 'block';
-            setTimeout(() => {
-                message.style.display = 'none';
-            }, 3000);
+            showMessage('Credentials deployed successfully!');
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Deploy Credentials';
         });
     });
+
+    // Focus username by default if empty
+    if (!usernameInput.value) {
+        usernameInput.focus();
+    }
 });

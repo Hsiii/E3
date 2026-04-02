@@ -1,12 +1,12 @@
 {
   "manifest_version": 3,
-  "name": "NYCU Portal Auto-Login",
-  "version": "1.0",
-  "description": "Automatically fills and submits credentials on NYCU Portal.",
+  "name": "EZE3",
+  "version": "1.0.0",
+  "description": "Premium browser automation for NYCU Portal. Easy access, zero friction.",
   "permissions": ["storage"],
   "options_page": "options.html",
   "action": {
-    "default_title": "NYCU Portal Auto-Login",
+    "default_title": "EZE3",
     "default_popup": "options.html"
   },
   "content_scripts": [
