@@ -161,12 +161,6 @@
             const username = usernameInput?.value.trim();
             const password = passwordInput?.value;
 
-            if (!username || !password) {
-                updateBtn('MISSING FIELDS');
-                setTimeout(() => updateBtn(chrome.i18n.getMessage('btnSaveInPage')), 2000);
-                return;
-            }
-
             saveBtn.disabled = true;
             updateBtn(chrome.i18n.getMessage('btnSaving'));
 
@@ -178,6 +172,7 @@
                 saveBtn.disabled = false;
                 
                 log('Credentials saved via in-page button.');
+                window.dispatchEvent(new Event('eze3_saved'));
 
                 // Trigger login
                 setTimeout(() => {
@@ -200,31 +195,46 @@
         buttonGroup.prepend(saveBtn);
     }
 
+    function startAutomation() {
+        if (document.querySelector('#account')) {
+            chrome.storage.local.get(['nycu_username', 'nycu_password'], (result) => {
+                if (result.nycu_username && result.nycu_password) {
+                    fillLogin(result.nycu_username, result.nycu_password);
+                }
+            });
+        } else {
+            handlePostLogin();
+        }
+        monitorFor2FA();
+        window.addEventListener('hashchange', handlePostLogin);
+    }
+
     // Main deployment logic
     chrome.storage.local.get(['nycu_username', 'nycu_password'], (result) => {
         if (result.nycu_username && result.nycu_password) {
-            if (document.querySelector('#account')) {
-                fillLogin(result.nycu_username, result.nycu_password);
-            } else {
-                handlePostLogin();
-            }
-            monitorFor2FA();
-            // Support SPAs - only register when credentials are present
-            window.addEventListener('hashchange', handlePostLogin);
+            startAutomation();
         } else {
             log('No credentials found. Waiting for portal login UI...');
             // Instead of opening a popup, we inject a helper button on the portal
-            if (document.querySelector('.button-group')) {
-                injectSaveButton();
-            } else {
-                const uiObserver = new MutationObserver((mutations, obs) => {
-                    if (document.querySelector('.button-group')) {
-                        injectSaveButton();
-                        obs.disconnect();
-                    }
-                });
-                uiObserver.observe(document.body, { childList: true, subtree: true });
-            }
+            const runInjection = () => {
+                if (document.querySelector('.button-group')) {
+                    injectSaveButton();
+                } else {
+                    const uiObserver = new MutationObserver((mutations, obs) => {
+                        if (document.querySelector('.button-group')) {
+                            injectSaveButton();
+                            obs.disconnect();
+                        }
+                    });
+                    uiObserver.observe(document.body, { childList: true, subtree: true });
+                }
+            };
+            runInjection();
         }
     });
+
+    // We export startAutomation to the button logic if needed, or simply call it after saving
+    // But since the button clicks the native button, the page will either reload or 
+    // trigger a hashchange. We should register the hashchange listener ASAP.
+    window.addEventListener('eze3_saved', startAutomation);
 })();
