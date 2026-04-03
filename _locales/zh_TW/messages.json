@@ -8,12 +8,8 @@
     "description": "Extension description"
   },
   "pageTitle": {
-    "message": "EZE3 | 帳號設定",
-    "description": "Options page title"
-  },
-  "subtitle": {
-    "message": "NYCU 帳號設定",
-    "description": "Subtitle below the logo"
+    "message": "EZE3",
+    "description": "Popup title"
   },
   "labelUsername": {
     "message": "帳號",
