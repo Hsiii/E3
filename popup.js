@@ -56,6 +56,14 @@ document.addEventListener('DOMContentLoaded', () => {
         const username = usernameInput.value.trim();
         const password = passwordInput.value;
 
+        if (!username || !password) {
+            saveBtn.textContent = t('msgMissingFields');
+            setTimeout(() => {
+                saveBtn.textContent = originalSaveText;
+            }, 2000);
+            return;
+        }
+
         // Add visual feedback
         saveBtn.disabled = true;
         saveBtn.textContent = t('btnSaving');
