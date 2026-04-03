@@ -24,7 +24,7 @@
     "description": "Password input placeholder"
   },
   "btnSave": {
-    "message": "儲存至本機",
+    "message": "儲存",
     "description": "Save button text"
   },
   "btnSaving": {
