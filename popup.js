@@ -32,15 +32,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const passwordInput = document.getElementById('password');
     const saveBtn = document.getElementById('save');
     const closeBtn = document.getElementById('close');
-    const messageEl = document.getElementById('message');
 
-    const showMessage = (text, type = 'success') => {
-        messageEl.textContent = text;
-        messageEl.className = `message ${type} show`;
-        setTimeout(() => {
-            messageEl.classList.remove('show');
-        }, 3000);
-    };
+    let originalSaveText = t('btnSave');
 
     // Load saved credentials
     chrome.storage.local.get(['nycu_username', 'nycu_password'], (result) => {
@@ -52,19 +45,31 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    // Reset button text when inputs change
+    const resetButtonText = () => {
+        if (saveBtn.textContent !== originalSaveText) {
+            saveBtn.textContent = originalSaveText;
+        }
+    };
+
+    usernameInput.addEventListener('input', resetButtonText);
+    passwordInput.addEventListener('input', resetButtonText);
+
     // Save credentials with validation
     saveBtn.addEventListener('click', () => {
         const username = usernameInput.value.trim();
         const password = passwordInput.value;
 
         if (!username || !password) {
-            showMessage(t('msgMissingFields'), 'error');
+            saveBtn.textContent = t('msgMissingFields');
+            setTimeout(() => {
+                saveBtn.textContent = originalSaveText;
+            }, 2000);
             return;
         }
 
         // Add visual feedback
         saveBtn.disabled = true;
-        const originalText = saveBtn.textContent;
         saveBtn.textContent = t('btnSaving');
 
         chrome.storage.local.set({
@@ -72,14 +77,15 @@ document.addEventListener('DOMContentLoaded', () => {
             nycu_password: password
         }, () => {
             if (chrome.runtime.lastError) {
-                showMessage(t('msgSaveFailed'), 'error');
+                saveBtn.textContent = t('msgSaveFailed');
                 saveBtn.disabled = false;
-                saveBtn.textContent = originalText;
+                setTimeout(() => {
+                    saveBtn.textContent = originalSaveText;
+                }, 2000);
                 return;
             }
-            showMessage(t('msgSaved'), 'success');
+            saveBtn.textContent = t('msgSaved');
             saveBtn.disabled = false;
-            saveBtn.textContent = originalText;
         });
     });
 
