@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pixel Art Editor - 16x16</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #0f172a;
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            align-items: center;
+        }
+
+        h1 {
+            font-size: 2rem;
+            color: #f1a856;
+            text-align: center;
+        }
+
+        .toolbar {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .toolbar label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+        }
+
+        .color-picker {
+            width: 50px;
+            height: 50px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-primary {
+            background-color: #f1a856;
+            color: #0f172a;
+        }
+
+        .btn-primary:hover {
+            background-color: #f5b86b;
+            transform: scale(1.05);
+        }
+
+        .btn-secondary {
+            background-color: #1e293b;
+            color: #ffffff;
+        }
+
+        .btn-secondary:hover {
+            background-color: #334155;
+        }
+
+        .canvas {
+            display: inline-grid;
+            grid-template-columns: repeat(16, 1fr);
+            gap: 1px;
+            background: #1e293b;
+            padding: 10px;
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .pixel {
+            width: 30px;
+            height: 30px;
+            background: transparent;
+            border: 1px solid #334155;
+            cursor: pointer;
+            transition: background-color 0.1s;
+        }
+
+        .pixel:hover {
+            border-color: #475569;
+        }
+
+        .info {
+            font-size: 0.85rem;
+            color: #94a3b8;
+            text-align: center;
+            max-width: 400px;
+        }
+
+        .output {
+            margin-top: 20px;
+            padding: 15px;
+            background: #1e293b;
+            border-radius: 6px;
+            border: 1px solid #334155;
+            max-width: 600px;
+            word-break: break-all;
+            font-family: 'Courier New', monospace;
+            font-size: 0.8rem;
+            display: none;
+            color: #86efac;
+        }
+
+        .output.show {
+            display: block;
+        }
+
+        .output-label {
+            color: #94a3b8;
+            margin-bottom: 10px;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎨 Pixel Art Editor</h1>
+        
+        <div class="toolbar">
+            <label>Color:</label>
+            <input type="color" id="colorPicker" class="color-picker" value="#f1a856">
+            <button class="btn-secondary" id="clearBtn">Clear</button>
+            <button class="btn-primary" id="saveBtn">Save</button>
+        </div>
+
+        <div class="info">
+            Click to toggle pixels. Drag to fill multiple pixels (point symmetry enabled). Hold Alt/Opt while dragging to erase.
+        </div>
+
+        <div class="canvas" id="canvas"></div>
+
+        <div class="output" id="output">
+            <div class="output-label">Pixel Data:</div>
+            <div id="outputData"></div>
+        </div>
+    </div>
+
+    <script>
+        const GRID_SIZE = 16;
+        const canvas = document.getElementById('canvas');
+        const colorPicker = document.getElementById('colorPicker');
+        const clearBtn = document.getElementById('clearBtn');
+        const saveBtn = document.getElementById('saveBtn');
+        const output = document.getElementById('output');
+        const outputData = document.getElementById('outputData');
+
+        // Initialize grid
+        const grid = Array(GRID_SIZE * GRID_SIZE).fill(null).map(() => ({}));
+        const pixelElements = [];
+        let isDragging = false;
+        let isErasing = false;
+        let dragStartIndex = -1;
+
+        // Calculate point-symmetric index (180° rotation around center)
+        const getSymmetricIndex = (index) => {
+            const row = Math.floor(index / GRID_SIZE);
+            const col = index % GRID_SIZE;
+            const symRow = GRID_SIZE - 1 - row;
+            const symCol = GRID_SIZE - 1 - col;
+            return symRow * GRID_SIZE + symCol;
+        };
+
+        // Helper function to fill/erase a pixel and its symmetric counterpart
+        const fillPixel = (index, shouldErase = false) => {
+            const symIndex = getSymmetricIndex(index);
+            
+            if (shouldErase) {
+                grid[index].color = null;
+                pixelElements[index].style.background = 'transparent';
+                grid[symIndex].color = null;
+                pixelElements[symIndex].style.background = 'transparent';
+            } else {
+                const color = colorPicker.value;
+                grid[index].color = color;
+                pixelElements[index].style.background = color;
+                grid[symIndex].color = color;
+                pixelElements[symIndex].style.background = color;
+            }
+        };
+
+        // Toggle pixel (fill if empty, clear if filled)
+        const togglePixel = (index) => {
+            const symIndex = getSymmetricIndex(index);
+            
+            if (grid[index].color) {
+                // Already filled, so clear it
+                grid[index].color = null;
+                pixelElements[index].style.background = 'transparent';
+                grid[symIndex].color = null;
+                pixelElements[symIndex].style.background = 'transparent';
+            } else {
+                // Empty, so fill it
+                const color = colorPicker.value;
+                grid[index].color = color;
+                pixelElements[index].style.background = color;
+                grid[symIndex].color = color;
+                pixelElements[symIndex].style.background = color;
+            }
+        };
+
+        // Create pixel elements
+        for (let i = 0; i < GRID_SIZE * GRID_SIZE; i++) {
+            const pixel = document.createElement('div');
+            pixel.className = 'pixel';
+            pixel.dataset.index = i;
+            
+            pixel.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                dragStartIndex = i;
+                isErasing = e.altKey;
+                // Don't fill on mousedown, wait to see if it's a click or drag
+            });
+
+            pixel.addEventListener('mouseover', () => {
+                if (isDragging && dragStartIndex !== i) {
+                    // This is a drag, not just a click
+                    fillPixel(i, isErasing);
+                }
+            });
+
+            pixel.addEventListener('mouseup', () => {
+                // If we're on the same pixel we started on, it's a click - toggle it
+                if (dragStartIndex === i) {
+                    togglePixel(i);
+                }
+            });
+
+            canvas.appendChild(pixel);
+            pixelElements.push(pixel);
+        }
+
+        // Global mouseup to stop dragging
+        document.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+
+        // Clear button
+        clearBtn.addEventListener('click', () => {
+            grid.forEach((cell, i) => {
+                cell.color = null;
+                pixelElements[i].style.background = 'transparent';
+            });
+            output.classList.remove('show');
+        });
+
+        // Save button
+        saveBtn.addEventListener('click', () => {
+            // Convert grid to 2D array
+            const pixelArray = [];
+            for (let i = 0; i < GRID_SIZE; i++) {
+                const row = [];
+                for (let j = 0; j < GRID_SIZE; j++) {
+                    const color = grid[i * GRID_SIZE + j].color;
+                    row.push(color || 'transparent');
+                }
+                pixelArray.push(row);
+            }
+
+            // Create JSON output
+            const jsonOutput = JSON.stringify(pixelArray, null, 2);
+            
+            // Create PNG data URL output for easy conversion
+            const canvas2 = document.createElement('canvas');
+            canvas2.width = GRID_SIZE;
+            canvas2.height = GRID_SIZE;
+            const ctx = canvas2.getContext('2d');
+            
+            // Set transparent background
+            ctx.clearRect(0, 0, GRID_SIZE, GRID_SIZE);
+            
+            // Draw pixels
+            for (let i = 0; i < GRID_SIZE; i++) {
+                for (let j = 0; j < GRID_SIZE; j++) {
+                    const color = grid[i * GRID_SIZE + j].color;
+                    if (color) {
+                        ctx.fillStyle = color;
+                        ctx.fillRect(j, i, 1, 1);
+                    }
+                }
+            }
+
+            const pngData = canvas2.toDataURL('image/png');
+
+            // Automatically download the PNG
+            const link = document.createElement('a');
+            link.href = pngData;
+            link.download = 'pixel-art.png';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            // Display output
+            outputData.innerHTML = `
+                <div style="margin-bottom: 10px;">
+                    <strong>✓ Image downloaded as pixel-art.png</strong><br>
+                    <small style="color: #94a3b8;">JSON Grid Data & PNG URL also shown below</small>
+                </div>
+                <div style="margin-top: 15px; margin-bottom: 10px;">
+                    <strong>JSON Grid Data:</strong><br>
+                    <code style="display: block; margin-top: 5px; padding: 10px; background: #0f172a; border-radius: 4px; overflow-x: auto;">${escapeHtml(jsonOutput)}</code>
+                </div>
+                <div style="margin-top: 15px;">
+                    <strong>PNG Data URL:</strong><br>
+                    <code style="display: block; margin-top: 5px; padding: 10px; background: #0f172a; border-radius: 4px; overflow-x: auto; word-break: break-all;">${pngData.substring(0, 100)}...</code>
+                </div>
+                <div style="margin-top: 15px;">
+                    <strong>Preview:</strong><br>
+                    <img src="${pngData}" style="image-rendering: pixelated; image-rendering: crisp-edges; width: 200px; height: 200px; border: 2px solid #334155; border-radius: 4px; margin-top: 10px;">
+                </div>
+            `;
+            output.classList.add('show');
+
+            // Log to console for easy access
+            console.log('Pixel Grid:', pixelArray);
+            console.log('PNG Data URL:', pngData);
+        });
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>
