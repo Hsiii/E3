@@ -1,0 +1,9 @@
+{
+  "name": "eze3",
+  "version": "1.1.0",
+  "description": "NYCU Portal Autofill Chrome Extension",
+  "private": true,
+  "scripts": {
+    "build": "rm -rf dist && mkdir -p dist && cd src && zip -r ../dist/EZE3.zip . -x '*.DS_Store'",
+  }
+}

@@ -1,0 +1,58 @@
+{
+  "extName": {
+    "message": "EZE3",
+    "description": "Extension name"
+  },
+  "extDescription": {
+    "message": "A browser extension for easy access to E3, the NYCU learning platform.",
+    "description": "Extension description"
+  },
+  "labelUsername": {
+    "message": "Username",
+    "description": "Username field label"
+  },
+  "labelPassword": {
+    "message": "Password",
+    "description": "Password field label"
+  },
+  "placeholderUsername": {
+    "message": "Portal Account",
+    "description": "Username input placeholder"
+  },
+  "placeholderPassword": {
+    "message": "Portal Password",
+    "description": "Password input placeholder"
+  },
+  "btnSave": {
+    "message": "Save Locally",
+    "description": "Save button text"
+  },
+  "btnSaving": {
+    "message": "Saving...",
+    "description": "Save button text while saving"
+  },
+  "msgMissingFields": {
+    "message": "MISSING FIELDS",
+    "description": "Error when fields are empty"
+  },
+  "msgSaveFailed": {
+    "message": "Save failed!",
+    "description": "Error when storage write fails"
+  },
+  "msgSaved": {
+    "message": "Saved!",
+    "description": "Success message after saving"
+  },
+  "btnClose": {
+    "message": "Close",
+    "description": "Close popup button text"
+  },
+  "btnSaveInPage": {
+    "message": "Save to EZE3",
+    "description": "Button to save credentials in-page"
+  },
+  "msgSavedInPage": {
+    "message": "Credentials saved",
+    "description": "Success message in-page"
+  }
+}

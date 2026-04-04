@@ -1,0 +1,58 @@
+{
+  "extName": {
+    "message": "EZE3",
+    "description": "Extension name"
+  },
+  "extDescription": {
+    "message": "陽明交大E3平台自動登入工具，支援從入口網站及E3登入頁面自動登入並重新導向至E3。",
+    "description": "Extension description"
+  },
+  "labelUsername": {
+    "message": "帳號",
+    "description": "Username field label"
+  },
+  "labelPassword": {
+    "message": "密碼",
+    "description": "Password field label"
+  },
+  "placeholderUsername": {
+    "message": "入口帳號",
+    "description": "Username input placeholder"
+  },
+  "placeholderPassword": {
+    "message": "入口密碼",
+    "description": "Password input placeholder"
+  },
+  "btnSave": {
+    "message": "儲存",
+    "description": "Save button text"
+  },
+  "btnSaving": {
+    "message": "儲存中…",
+    "description": "Save button text while saving"
+  },
+  "msgMissingFields": {
+    "message": "欄位未填寫",
+    "description": "Error when fields are empty"
+  },
+  "msgSaveFailed": {
+    "message": "儲存失敗！",
+    "description": "Error when storage write fails"
+  },
+  "msgSaved": {
+    "message": "已儲存！",
+    "description": "Success message after saving"
+  },
+  "btnClose": {
+    "message": "關閉",
+    "description": "Close popup button text"
+  },
+  "btnSaveInPage": {
+    "message": "儲存至 EZE3",
+    "description": "Button to save credentials in-page"
+  },
+  "msgSavedInPage": {
+    "message": "帳密已儲存",
+    "description": "Success message in-page"
+  }
+}
