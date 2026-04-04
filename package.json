@@ -4,6 +4,6 @@
   "description": "NYCU Portal Autofill Chrome Extension",
   "private": true,
   "scripts": {
-    "build": "rm -rf dist && mkdir -p dist && cd src && zip -r ../dist/EZE3.zip . -x '*.DS_Store'",
+    "build": "rm -rf dist && mkdir -p dist && cd src && zip -r ../dist/EZE3.zip . -x '*.DS_Store'"
   }
 }
