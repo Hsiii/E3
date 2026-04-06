@@ -837,7 +837,7 @@
             return;
         }
 
-        const forceSetup2FAAfterLogin = shouldForceSetup2FAAfterLogin();
+        let forceSetup2FAAfterLogin = shouldForceSetup2FAAfterLogin();
         const forceRedirectAfterLogin = shouldForceRedirectAfterLogin();
 
         if (currentHash !== '#/links/nycu' && e3LinkObserver) {
@@ -845,6 +845,13 @@
             e3LinkObserver = null;
         }
         
+        if (forceSetup2FAAfterLogin && currentHash.startsWith(TWO_FACTOR_HASH_PREFIX)) {
+            // Consume the onboarding redirect once users reach setup page,
+            // so they are not forced back forever after this point.
+            setForceSetup2FAAfterLogin(false);
+            forceSetup2FAAfterLogin = false;
+        }
+
         if (forceSetup2FAAfterLogin && !currentHash.startsWith(TWO_FACTOR_HASH_PREFIX)) {
             log('First-time setup detected. Navigating to 2FA setup page...');
             window.location.hash = TWO_FACTOR_HASH_PREFIX;
