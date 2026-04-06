@@ -15,6 +15,80 @@
     let postLoginObserverStarted = false;
     let portalErrorObserverStarted = false;
     let tokenErrorRecoveryCount = 0;
+    let extensionContextInvalidated = false;
+
+    function markExtensionContextInvalidated(error) {
+        const message = String(error?.message || '').toLowerCase();
+        if (!message.includes('extension context invalidated')) return;
+        if (extensionContextInvalidated) return;
+
+        extensionContextInvalidated = true;
+        if (otpFillTimer) {
+            clearInterval(otpFillTimer);
+            otpFillTimer = null;
+        }
+        log('Extension context invalidated. Stopping EZE3 automation safely.');
+    }
+
+    function hasExtensionContext() {
+        if (extensionContextInvalidated) return false;
+        try {
+            return typeof chrome !== 'undefined' && Boolean(chrome.runtime?.id);
+        } catch (error) {
+            markExtensionContextInvalidated(error);
+            return false;
+        }
+    }
+
+    function safeStorageGet(keys, onResult) {
+        if (!hasExtensionContext()) return false;
+        try {
+            chrome.storage.local.get(keys, (result) => {
+                if (!hasExtensionContext()) return;
+                onResult(result || {});
+            });
+            return true;
+        } catch (error) {
+            markExtensionContextInvalidated(error);
+            return false;
+        }
+    }
+
+    function safeStorageSet(values, onDone) {
+        if (!hasExtensionContext()) {
+            if (onDone) onDone(new Error('Extension context invalidated.'));
+            return false;
+        }
+
+        try {
+            chrome.storage.local.set(values, () => {
+                if (!hasExtensionContext()) {
+                    if (onDone) onDone(new Error('Extension context invalidated.'));
+                    return;
+                }
+                if (onDone) onDone(chrome.runtime.lastError || null);
+            });
+            return true;
+        } catch (error) {
+            markExtensionContextInvalidated(error);
+            if (onDone) onDone(error);
+            return false;
+        }
+    }
+
+    function safeRuntimeSendMessage(message, onDone) {
+        if (!hasExtensionContext()) return false;
+        try {
+            chrome.runtime.sendMessage(message, () => {
+                if (!hasExtensionContext()) return;
+                if (onDone) onDone(chrome.runtime.lastError || null);
+            });
+            return true;
+        } catch (error) {
+            markExtensionContextInvalidated(error);
+            return false;
+        }
+    }
 
     function isElementClickable(element) {
         if (!element) return false;
@@ -250,7 +324,7 @@
     function resumeLoginAfterTokenError() {
         if (tokenErrorRecoveryCount > 3) return;
 
-        chrome.storage.local.get(['nycu_username', 'nycu_password'], (result) => {
+        safeStorageGet(['nycu_username', 'nycu_password'], (result) => {
             if (document.querySelector('#account') && result.nycu_username && result.nycu_password) {
                 fillLogin(result.nycu_username, result.nycu_password);
                 monitorFor2FA();
@@ -356,7 +430,7 @@
         }
 
         const tick = () => {
-            chrome.storage.local.get([OTP_STORAGE_KEY], async (result) => {
+            const ok = safeStorageGet([OTP_STORAGE_KEY], async (result) => {
                 const secret = result[OTP_STORAGE_KEY];
                 if (!secret || !(field instanceof HTMLInputElement) || !document.contains(field)) {
                     return;
@@ -364,6 +438,11 @@
                 const otpCode = await fillOtpField(field, secret);
                 submitOtpIfReady(field, otpCode);
             });
+
+            if (!ok && otpFillTimer) {
+                clearInterval(otpFillTimer);
+                otpFillTimer = null;
+            }
         };
 
         tick();
@@ -532,13 +611,13 @@
                 return;
             }
 
-            chrome.storage.local.set({
+            safeStorageSet({
                 [OTP_STORAGE_KEY]: otpData.secret,
                 nycu_2fa_issuer: otpData.issuer,
                 nycu_2fa_label: otpData.label,
                 nycu_2fa_uri: otpData.uri
-            }, () => {
-                if (chrome.runtime.lastError) {
+            }, (error) => {
+                if (error) {
                     setButtonText('msg2FASaveFailed', '2FA save failed');
                     saveBtn.disabled = false;
                     return;
@@ -622,9 +701,9 @@
                 // After clicking, close this portal tab since it's no longer needed
                 log('Job completed. Closing original portal tab...');
                 setTimeout(() => {
-                    chrome.runtime.sendMessage({ action: 'close_tab' }, () => {
-                        if (chrome.runtime.lastError) {
-                            log('Tab close message failed:', chrome.runtime.lastError.message);
+                    safeRuntimeSendMessage({ action: 'close_tab' }, (error) => {
+                        if (error) {
+                            log('Tab close message failed:', error.message || error);
                         }
                     });
                 }, 1000); 
@@ -710,10 +789,16 @@
             saveBtn.disabled = true;
             updateBtn(chrome.i18n.getMessage('btnSaving'));
 
-            chrome.storage.local.set({
+            safeStorageSet({
                 nycu_username: username,
                 nycu_password: password
-            }, () => {
+            }, (error) => {
+                if (error) {
+                    updateBtn(chrome.i18n.getMessage('msgSaveFailed'));
+                    saveBtn.disabled = false;
+                    return;
+                }
+
                 updateBtn(chrome.i18n.getMessage('msgSavedInPage')); // Keep orange
                 saveBtn.disabled = false;
                 
@@ -748,7 +833,7 @@
 
     function startAutomation() {
         if (document.querySelector('#account')) {
-            chrome.storage.local.get(['nycu_username', 'nycu_password'], (result) => {
+            safeStorageGet(['nycu_username', 'nycu_password'], (result) => {
                 if (result.nycu_username && result.nycu_password) {
                     fillLogin(result.nycu_username, result.nycu_password);
                 }
@@ -765,7 +850,7 @@
     watchTwoFactorSettingsPage();
     monitorForPortalErrors();
 
-    chrome.storage.local.get(['nycu_username', 'nycu_password'], (result) => {
+    safeStorageGet(['nycu_username', 'nycu_password'], (result) => {
         if (result.nycu_username && result.nycu_password) {
             startAutomation();
         } else {
