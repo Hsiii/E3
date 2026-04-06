@@ -1,0 +1,157 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 320px;
+  min-height: auto;
+  background-color: #0f172a;
+  color: #ffffff;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+}
+
+body {
+  padding: 24px;
+}
+
+.logo {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #f1a856;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.password-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-field input {
+  padding-right: 34px;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: #94a3b8;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 0;
+}
+
+.password-toggle:hover {
+  color: #f1a856;
+  background-color: rgba(241, 168, 86, 0.1);
+}
+
+.password-toggle:focus-visible {
+  outline: 2px solid #f1a856;
+  outline-offset: 1px;
+}
+
+.password-toggle svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2.2;
+  pointer-events: none;
+}
+
+.password-toggle .password-icon-hide {
+  display: none;
+}
+
+.password-toggle[data-visible='true'] .password-icon-show {
+  display: none;
+}
+
+.password-toggle[data-visible='true'] .password-icon-hide {
+  display: block;
+}
+
+label {
+  display: block;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: #94a3b8;
+  margin-bottom: 6px;
+}
+
+input {
+  width: 100%;
+  padding: 10px 0;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid #1e293b;
+  color: #ffffff;
+  font-size: 0.95rem;
+  font-family: inherit;
+  transition: border-color 0.2s;
+}
+
+input:focus {
+  outline: none;
+  border-bottom-color: #f1a856;
+}
+
+.button-group {
+  display: flex;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.button-group button {
+  flex: 1;
+  padding: 10px;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  transition: all 0.2s;
+}
+
+#save {
+  background-color: #f1a856;
+  color: #0f172a;
+}
+
+#save:hover:not(:disabled) {
+  background-color: #f5b86b;
+  transform: scale(1.02);
+}
+
+#save:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+#close {
+  background-color: #1e293b;
+  color: #ffffff;
+}
+
+#close:hover {
+  background-color: #334155;
+}

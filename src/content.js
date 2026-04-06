@@ -24,6 +24,102 @@
     const FORCE_REDIRECT_AFTER_LOGIN_KEY = 'eze3_force_redirect_after_login';
     const FORCE_SETUP_2FA_AFTER_LOGIN_KEY = 'eze3_force_setup_2fa_after_login';
     const ONBOARDING_2FA_FLOW_KEY = 'eze3_onboarding_2fa_flow';
+    const EZE3_COMPONENT_STYLE_ID = 'eze3-component-styles';
+
+    function ensureEze3ComponentStyles() {
+        if (document.getElementById(EZE3_COMPONENT_STYLE_ID)) return;
+
+        const style = document.createElement('style');
+        style.id = EZE3_COMPONENT_STYLE_ID;
+        style.textContent = `
+            #eze3-2fa-guide {
+                margin-bottom: 12px;
+                padding: 12px 14px;
+                border: 1px solid #1e3a8a;
+                border-radius: 8px;
+                background: #eff6ff;
+                color: #0f172a;
+                font-size: 13px;
+                line-height: 1.45;
+            }
+
+            #eze3-2fa-guide .eze3-guide-title {
+                font-weight: 700;
+                margin-bottom: 6px;
+            }
+
+            #eze3-2fa-guide .eze3-guide-subtitle {
+                font-size: 12px;
+                color: #334155;
+                margin-bottom: 6px;
+            }
+
+            #eze3-2fa-guide .eze3-guide-list {
+                padding-left: 18px;
+                margin: 0;
+            }
+
+            #eze3-save-2fa-wrap {
+                display: block;
+                margin-top: 12px;
+                margin-bottom: 12px;
+            }
+
+            #eze3-save-2fa-btn {
+                width: 100%;
+                height: 44px;
+                padding: 0 16px 0 12px;
+                border: none;
+                border-radius: 8px;
+                background: #f1a856;
+                color: #0f172a;
+                font-size: 13px;
+                font-weight: 700;
+                letter-spacing: 0.02em;
+                cursor: pointer;
+                box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
+                display: inline-flex;
+                align-items: center;
+                justify-content: flex-start;
+                text-align: left;
+            }
+
+            #eze3-save-2fa-btn.is-saved {
+                color: #ffffff;
+            }
+
+            #eze3-save-btn {
+                background-color: #f1a856;
+                color: #0f172a;
+                border: none;
+                padding: 0 16px;
+                width: 100%;
+                height: 48px;
+                display: flex;
+                justify-content: flex-start;
+                align-items: center;
+                font-size: 14px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: all 0.15s ease;
+                text-transform: uppercase;
+                letter-spacing: 0.02em;
+            }
+
+            #eze3-save-btn .eze3-save-btn-label {
+                flex-grow: 1;
+                text-align: left;
+            }
+
+            #eze3-save-btn .eze3-save-btn-icon {
+                display: flex;
+                align-items: center;
+                margin-left: 16px;
+            }
+        `;
+
+        (document.head || document.documentElement).appendChild(style);
+    }
 
     function markExtensionContextInvalidated(error) {
         const message = String(error?.message || '').toLowerCase();
@@ -639,10 +735,6 @@
         const rect = qrImage.getBoundingClientRect();
         const width = Math.max(180, Math.round(rect.width) || qrImage.clientWidth || 220);
         wrapper.style.width = `${width}px`;
-        saveBtn.style.width = '100%';
-        saveBtn.style.justifyContent = 'flex-start';
-        saveBtn.style.textAlign = 'left';
-        saveBtn.style.paddingLeft = '12px';
 
         if (qrImage.nextElementSibling !== wrapper) {
             qrImage.insertAdjacentElement('afterend', wrapper);
@@ -666,12 +758,14 @@
     }
 
     function inject2FASetupGuide() {
+        ensureEze3ComponentStyles();
+
         let guide = document.querySelector('#eze3-2fa-guide');
         const msg = (key, fallback) => chrome.i18n.getMessage(key) || fallback;
         const guideHtml = [
-            `<div style="font-weight:700; margin-bottom:6px;">${msg('guide2FATitle', 'EZE3 2FA Setup Guide')}</div>`,
-            `<div style="font-size:12px; color:#334155; margin-bottom:6px;">${msg('guide2FASubtitle', 'Complete both EZE3 setup and official Google Authenticator setup for backup.')}</div>`,
-            '<ol style="padding-left:18px; margin:0;">',
+            `<div class="eze3-guide-title">${msg('guide2FATitle', 'EZE3 2FA Setup Guide')}</div>`,
+            `<div class="eze3-guide-subtitle">${msg('guide2FASubtitle', 'Complete both EZE3 setup and official Google Authenticator setup for backup.')}</div>`,
+            '<ol class="eze3-guide-list">',
             `<li>${msg('guide2FAStep1', 'If your 2FA is already configured, cancel it first.')}</li>`,
             `<li>${msg('guide2FAStep2', 'Click "Save 2FA for EZE3" below to save the QR code into EZE3 for auto-fill.')}</li>`,
             `<li>${msg('guide2FAStep3', 'Scan the QR code with Google Authenticator on your phone and finish the portal setup.')}</li>`,
@@ -681,17 +775,6 @@
         if (!(guide instanceof HTMLDivElement)) {
             guide = document.createElement('div');
             guide.id = 'eze3-2fa-guide';
-            guide.style.cssText = [
-                'margin-bottom: 12px',
-                'padding: 12px 14px',
-                'border: 1px solid #1e3a8a',
-                'border-radius: 8px',
-                'background: #eff6ff',
-                'color: #0f172a',
-                'font-size: 13px',
-                'line-height: 1.45'
-            ].join(';');
-
             guide.innerHTML = guideHtml;
         }
 
@@ -803,6 +886,7 @@
 
     function injectSave2FAButton() {
         if (!isTwoFactorSettingsPage()) return;
+        ensureEze3ComponentStyles();
 
         const qrImage = document.querySelector(
             'img[src*="quickchart.io/qr"][src*="text=otpauth"], img[src*="quickchart.io/qr"][src*="otpauth%3A%2F%2F"], img[src*="quickchart.io/qr"]'
@@ -817,31 +901,11 @@
         if (!(buttonWrapper instanceof HTMLDivElement) || !(saveBtn instanceof HTMLButtonElement)) {
             buttonWrapper = document.createElement('div');
             buttonWrapper.id = 'eze3-save-2fa-wrap';
-            buttonWrapper.style.cssText = [
-                'display: block',
-                'margin-top: 12px',
-                'margin-bottom: 12px'
-            ].join(';');
 
             saveBtn = document.createElement('button');
             saveBtn.id = 'eze3-save-2fa-btn';
             saveBtn.type = 'button';
             saveBtn.textContent = chrome.i18n.getMessage('btnSave2FAInPage') || 'Save 2FA for EZE3';
-            saveBtn.style.cssText = [
-                'height: 44px',
-                'padding: 0 16px',
-                'border: none',
-                'border-radius: 8px',
-                'background: #f1a856',
-                'color: #0f172a',
-                'font-size: 13px',
-                'font-weight: 700',
-                'letter-spacing: 0.02em',
-                'cursor: pointer',
-                'box-shadow: 0 6px 20px rgba(0,0,0,0.2)',
-                'display: inline-flex',
-                'align-items: center'
-            ].join(';');
 
             buttonWrapper.appendChild(saveBtn);
         }
@@ -859,6 +923,7 @@
 
         saveBtn.dataset.eze3Bound = 'true';
         saveBtn.addEventListener('click', async () => {
+            saveBtn.classList.remove('is-saved');
             saveBtn.disabled = true;
             setButtonText('btnParsing2FA', 'Parsing 2FA QR...');
 
@@ -885,7 +950,7 @@
                 }
 
                 setButtonText('msg2FASaved', '2FA saved');
-                saveBtn.style.color = '#ffffff';
+                saveBtn.classList.add('is-saved');
                 saveBtn.disabled = false;
             });
         });
@@ -1069,35 +1134,18 @@
     function injectSaveButton() {
         const buttonGroup = document.querySelector('.button-group');
         if (!buttonGroup || document.querySelector('#eze3-save-btn')) return;
+        ensureEze3ComponentStyles();
 
         log('Injecting save button into portal...');
 
         const saveBtn = document.createElement('button');
         saveBtn.id = 'eze3-save-btn';
         saveBtn.type = 'button';
-        // Apply base styles
-        saveBtn.style.cssText = `
-            background-color: #f1a856;
-            color: #0f172a;
-            border: none;
-            padding: 0 16px;
-            width: 100%;
-            height: 48px;
-            display: flex;
-            justify-content: start;
-            align-items: center;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.15s ease;
-            text-transform: uppercase;
-            letter-spacing: 0.02em;
-        `;
 
         const updateBtn = (text, bgColor) => {
             saveBtn.innerHTML = `
-                <span style="flex-grow: 1; text-align: left;">${text}</span>
-                <span style="display: flex; align-items: center; margin-left: 16px;">
+                <span class="eze3-save-btn-label">${text}</span>
+                <span class="eze3-save-btn-icon">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v13a2 2 0 0 1-2 2z"></path>
                         <polyline points="17 21 17 13 7 13 7 21"></polyline>
