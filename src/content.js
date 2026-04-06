@@ -18,6 +18,8 @@
     let extensionContextInvalidated = false;
     let e3RedirectTriggered = false;
     let e3LinkObserver = null;
+    let navigationRecoveryListenersAttached = false;
+    const FORCE_REDIRECT_AFTER_LOGIN_KEY = 'eze3_force_redirect_after_login';
 
     function markExtensionContextInvalidated(error) {
         const message = String(error?.message || '').toLowerCase();
@@ -89,6 +91,36 @@
         } catch (error) {
             markExtensionContextInvalidated(error);
             return false;
+        }
+    }
+
+    function setForceRedirectAfterLogin(enabled) {
+        try {
+            if (enabled) {
+                sessionStorage.setItem(FORCE_REDIRECT_AFTER_LOGIN_KEY, '1');
+            } else {
+                sessionStorage.removeItem(FORCE_REDIRECT_AFTER_LOGIN_KEY);
+            }
+        } catch (error) {
+            log('Unable to persist redirect flag:', error);
+        }
+    }
+
+    function shouldForceRedirectAfterLogin() {
+        try {
+            return sessionStorage.getItem(FORCE_REDIRECT_AFTER_LOGIN_KEY) === '1';
+        } catch (error) {
+            log('Unable to read redirect flag:', error);
+            return false;
+        }
+    }
+
+    function resetE3RedirectState() {
+        e3RedirectTriggered = false;
+        setForceRedirectAfterLogin(false);
+        if (e3LinkObserver) {
+            e3LinkObserver.disconnect();
+            e3LinkObserver = null;
         }
     }
 
@@ -487,9 +519,13 @@
         if (postLoginObserverStarted) return;
 
         const runPostLoginWhenReady = () => {
-            if (!document.querySelector('#account')) {
-                handlePostLogin();
+            if (document.querySelector('#account')) {
+                // Login page means a new auth cycle can happen after logout.
+                resetE3RedirectState();
+                return;
             }
+
+            handlePostLogin();
         };
 
         const observer = new MutationObserver(() => {
@@ -670,6 +706,8 @@
 
         if (accountField && passwordField) {
             log('Initiating automation...');
+            e3RedirectTriggered = false;
+            setForceRedirectAfterLogin(true);
             accountField.value = username;
             passwordField.value = password;
 
@@ -686,6 +724,14 @@
 
     function handlePostLogin() {
         const currentHash = window.location.hash;
+        const isLoginPage = Boolean(document.querySelector('#account'));
+
+        if (isLoginPage) {
+            resetE3RedirectState();
+            return;
+        }
+
+        const forceRedirectAfterLogin = shouldForceRedirectAfterLogin();
 
         if (currentHash !== '#/links/nycu' && e3LinkObserver) {
             e3LinkObserver.disconnect();
@@ -694,9 +740,11 @@
         
         // Dashboard redirection
         const isDashboard = currentHash === '' || currentHash === '#/' || currentHash === '#/home';
-        if (!document.querySelector('#account') && isDashboard) {
+        const shouldJumpToLinks = isDashboard || forceRedirectAfterLogin;
+        if (shouldJumpToLinks && currentHash !== '#/links/nycu') {
             log('Session detected. Navigating to E3...');
             window.location.hash = '#/links/nycu';
+            return;
         }
 
         // Automated link picking on the transition page
@@ -716,6 +764,7 @@
                     e3LinkObserver.disconnect();
                     e3LinkObserver = null;
                 }
+                setForceRedirectAfterLogin(false);
 
                 log('Redirecting to E3 now...');
                 element.click();
@@ -747,6 +796,27 @@
                 e3LinkObserver.observe(document.body, { childList: true, subtree: true });
             }
         }
+    }
+
+    function recoverFromHistoryNavigation() {
+        if (document.querySelector('#account')) {
+            safeStorageGet(['nycu_username', 'nycu_password'], (result) => {
+                if (result.nycu_username && result.nycu_password) {
+                    fillLogin(result.nycu_username, result.nycu_password);
+                }
+            });
+            return;
+        }
+
+        handlePostLogin();
+    }
+
+    function attachNavigationRecoveryListeners() {
+        if (navigationRecoveryListenersAttached) return;
+
+        window.addEventListener('pageshow', recoverFromHistoryNavigation);
+        window.addEventListener('popstate', recoverFromHistoryNavigation);
+        navigationRecoveryListenersAttached = true;
     }
 
     function injectSaveButton() {
@@ -858,6 +928,8 @@
     }
 
     function startAutomation() {
+        attachNavigationRecoveryListeners();
+
         if (document.querySelector('#account')) {
             safeStorageGet(['nycu_username', 'nycu_password'], (result) => {
                 if (result.nycu_username && result.nycu_password) {
