@@ -21,6 +21,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             console.warn('[EZE3] close_tab failed:', error.message || error);
         });
     }
+
+    if (message.action === 'restart_portal_flow' && sender.tab && ALLOWED_ORIGINS.includes(senderOrigin)) {
+        chrome.tabs.create({ url: 'https://portal.nycu.edu.tw/#/', active: true }, () => {
+            const createError = chrome.runtime.lastError;
+            if (createError) {
+                console.warn('[EZE3] restart_portal_flow create tab failed:', createError.message || createError);
+                return;
+            }
+
+            chrome.tabs.remove(sender.tab.id, () => {
+                const closeError = chrome.runtime.lastError;
+                if (!closeError) return;
+                if (closeError.message && closeError.message.includes('No tab with id')) {
+                    return;
+                }
+                console.warn('[EZE3] restart_portal_flow close old tab failed:', closeError.message || closeError);
+            });
+        });
+    }
     
     if (message.action === 'open_popup') {
         chrome.windows.create({

@@ -19,8 +19,11 @@
     let e3RedirectTriggered = false;
     let e3LinkObserver = null;
     let navigationRecoveryListenersAttached = false;
+    let setupCompletionFlowTriggered = false;
+    let setupCompletionCheckInFlight = false;
     const FORCE_REDIRECT_AFTER_LOGIN_KEY = 'eze3_force_redirect_after_login';
     const FORCE_SETUP_2FA_AFTER_LOGIN_KEY = 'eze3_force_setup_2fa_after_login';
+    const ONBOARDING_2FA_FLOW_KEY = 'eze3_onboarding_2fa_flow';
 
     function markExtensionContextInvalidated(error) {
         const message = String(error?.message || '').toLowerCase();
@@ -137,8 +140,30 @@
         }
     }
 
+    function setOnboarding2FAFlowActive(enabled) {
+        try {
+            if (enabled) {
+                sessionStorage.setItem(ONBOARDING_2FA_FLOW_KEY, '1');
+            } else {
+                sessionStorage.removeItem(ONBOARDING_2FA_FLOW_KEY);
+            }
+        } catch (error) {
+            log('Unable to persist onboarding flow flag:', error);
+        }
+    }
+
+    function isOnboarding2FAFlowActive() {
+        try {
+            return sessionStorage.getItem(ONBOARDING_2FA_FLOW_KEY) === '1';
+        } catch (error) {
+            log('Unable to read onboarding flow flag:', error);
+            return false;
+        }
+    }
+
     function configurePostLoginTarget(has2FASecret) {
         e3RedirectTriggered = false;
+        setOnboarding2FAFlowActive(!has2FASecret);
         setForceSetup2FAAfterLogin(!has2FASecret);
         setForceRedirectAfterLogin(Boolean(has2FASecret));
     }
@@ -166,6 +191,7 @@
         if (clearFlowIntent) {
             setForceRedirectAfterLogin(false);
             setForceSetup2FAAfterLogin(false);
+            setOnboarding2FAFlowActive(false);
         }
     }
 
@@ -688,6 +714,93 @@
         }
     }
 
+    function hasAnyKeyword(text, keywords) {
+        return keywords.some((keyword) => text.includes(keyword));
+    }
+
+    function is2FASetupSuccessSignalPresent() {
+        const successNodes = [
+            ...document.querySelectorAll('.el-message--success .el-message__content'),
+            ...document.querySelectorAll('.el-notification--success .el-notification__content'),
+            ...document.querySelectorAll('.el-alert--success .el-alert__content')
+        ];
+
+        const successText = successNodes
+            .map((node) => (node.textContent || '').trim().toLowerCase())
+            .join(' ');
+
+        const has2FASuccessToast =
+            hasAnyKeyword(successText, ['成功', 'success']) &&
+            hasAnyKeyword(successText, ['2fa', 'two-factor', '二階段', '驗證']);
+
+        const pageText = (document.body?.innerText || '').toLowerCase();
+        const hasEnabledStateText = hasAnyKeyword(pageText, [
+            '二階段驗證已啟用',
+            '二階段已啟用',
+            '2fa enabled',
+            'two-factor enabled'
+        ]);
+
+        const buttonText = Array.from(document.querySelectorAll('button'))
+            .map((button) => (button.textContent || '').trim().toLowerCase())
+            .join(' ');
+        const hasDisable2FAAction = hasAnyKeyword(buttonText, [
+            '停用二階段',
+            '關閉二階段',
+            '解除二階段',
+            '取消二階段',
+            'disable 2fa',
+            'turn off 2fa',
+            'disable two-factor'
+        ]);
+
+        return has2FASuccessToast || hasEnabledStateText || hasDisable2FAAction;
+    }
+
+    function restartPortalFlowFrom2FASetupPage() {
+        if (setupCompletionFlowTriggered) return;
+
+        setupCompletionFlowTriggered = true;
+        setOnboarding2FAFlowActive(false);
+        setForceSetup2FAAfterLogin(false);
+        setForceRedirectAfterLogin(false);
+
+        const ok = safeRuntimeSendMessage({ action: 'restart_portal_flow' }, (error) => {
+            if (!error) return;
+
+            log('Failed to restart portal flow via background:', error.message || error);
+            window.location.href = 'https://portal.nycu.edu.tw/#/';
+        });
+
+        if (!ok) {
+            window.location.href = 'https://portal.nycu.edu.tw/#/';
+        }
+    }
+
+    function maybeRestartPortalFlowAfter2FASetup() {
+        if (!isTwoFactorSettingsPage()) {
+            setupCompletionCheckInFlight = false;
+            return;
+        }
+
+        if (!isOnboarding2FAFlowActive()) return;
+        if (setupCompletionFlowTriggered || setupCompletionCheckInFlight) return;
+
+        setupCompletionCheckInFlight = true;
+        const ok = safeStorageGet([OTP_STORAGE_KEY], (result) => {
+            setupCompletionCheckInFlight = false;
+            if (!isTwoFactorSettingsPage()) return;
+            if (!result[OTP_STORAGE_KEY]) return;
+            if (!is2FASetupSuccessSignalPresent()) return;
+
+            restartPortalFlowFrom2FASetupPage();
+        });
+
+        if (!ok) {
+            setupCompletionCheckInFlight = false;
+        }
+    }
+
     function injectSave2FAButton() {
         if (!isTwoFactorSettingsPage()) return;
 
@@ -774,7 +887,6 @@
                 setButtonText('msg2FASaved', '2FA saved');
                 saveBtn.style.color = '#ffffff';
                 saveBtn.disabled = false;
-                setForceSetup2FAAfterLogin(false);
             });
         });
     }
@@ -785,9 +897,11 @@
                 setForceSetup2FAAfterLogin(false);
                 inject2FASetupGuide();
                 injectSave2FAButton();
+                maybeRestartPortalFlowAfter2FASetup();
             } else {
                 removeSave2FAButton();
                 remove2FASetupGuide();
+                setupCompletionFlowTriggered = false;
             }
         };
 
@@ -815,9 +929,11 @@
         if (accountField && passwordField) {
             log('Initiating automation...');
             e3RedirectTriggered = false;
-            if (shouldForceSetup2FAAfterLogin()) {
+            if (isOnboarding2FAFlowActive()) {
+                setForceSetup2FAAfterLogin(true);
                 setForceRedirectAfterLogin(false);
             } else {
+                setForceSetup2FAAfterLogin(false);
                 setForceRedirectAfterLogin(true);
             }
             accountField.value = username;
@@ -894,6 +1010,7 @@
                 }
                 setForceRedirectAfterLogin(false);
                 setForceSetup2FAAfterLogin(false);
+                setOnboarding2FAFlowActive(false);
 
                 log('Redirecting to E3 now...');
                 element.click();
