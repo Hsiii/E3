@@ -149,6 +149,22 @@
                 continue;
             }
 
+            if (candidate instanceof HTMLImageElement && candidate.src) {
+                try {
+                    const srcUrl = new URL(candidate.src, window.location.href);
+                    const textParam = srcUrl.searchParams.get('text') || srcUrl.searchParams.get('chl');
+                    if (textParam) {
+                        const directParsed = parseOtpAuthUri(textParam.trim());
+                        if (directParsed) return directParsed;
+
+                        const decodedParsed = parseOtpAuthUri(decodeURIComponent(textParam).trim());
+                        if (decodedParsed) return decodedParsed;
+                    }
+                } catch (error) {
+                    log('Unable to parse QR image URL:', error);
+                }
+            }
+
             const raw = await detectQrRawValue(candidate);
             if (!raw) continue;
 
@@ -260,21 +276,30 @@
         if (!isTwoFactorSettingsPage()) return;
         if (document.querySelector('#eze3-save-2fa-btn')) return;
 
-        const targetContainer =
-            document.querySelector('.app-main') ||
-            document.querySelector('#app') ||
-            document.body;
+        const qrImage = document.querySelector(
+            'img[src*="quickchart.io/qr"][src*="text=otpauth"], img[src*="quickchart.io/qr"][src*="otpauth%3A%2F%2F"], img[src*="quickchart.io/qr"]'
+        );
+        if (!(qrImage instanceof HTMLImageElement) || !qrImage.parentElement) {
+            return;
+        }
+
+        const buttonWrapper = document.createElement('div');
+        buttonWrapper.id = 'eze3-save-2fa-wrap';
+        buttonWrapper.style.cssText = [
+            'display: flex',
+            'justify-content: center',
+            'margin-top: 12px',
+            'margin-bottom: 12px'
+        ].join(';');
 
         const saveBtn = document.createElement('button');
         saveBtn.id = 'eze3-save-2fa-btn';
         saveBtn.type = 'button';
         saveBtn.textContent = chrome.i18n.getMessage('btnSave2FAInPage') || 'Save 2FA for EZE3';
         saveBtn.style.cssText = [
-            'position: fixed',
-            'right: 24px',
-            'bottom: 24px',
-            'z-index: 2147483646',
             'height: 44px',
+            'min-width: 220px',
+            'max-width: 300px',
             'padding: 0 16px',
             'border: none',
             'border-radius: 8px',
@@ -324,7 +349,8 @@
             });
         });
 
-        targetContainer.appendChild(saveBtn);
+        buttonWrapper.appendChild(saveBtn);
+        qrImage.insertAdjacentElement('afterend', buttonWrapper);
     }
 
     function watchTwoFactorSettingsPage() {
