@@ -777,6 +777,7 @@
     function watchTwoFactorSettingsPage() {
         const triggerInject = () => {
             if (isTwoFactorSettingsPage()) {
+                setForceSetup2FAAfterLogin(false);
                 inject2FASetupGuide();
                 injectSave2FAButton();
             } else {
@@ -831,6 +832,7 @@
     function handlePostLogin() {
         const currentHash = window.location.hash;
         const isLoginPage = Boolean(document.querySelector('#account'));
+        const is2FASetupRoute = currentHash.startsWith(TWO_FACTOR_HASH_PREFIX);
 
         if (isLoginPage) {
             resetE3RedirectState(false);
@@ -845,11 +847,12 @@
             e3LinkObserver = null;
         }
         
-        if (forceSetup2FAAfterLogin && currentHash.startsWith(TWO_FACTOR_HASH_PREFIX)) {
-            // Consume the onboarding redirect once users reach setup page,
-            // so they are not forced back forever after this point.
+        if (is2FASetupRoute) {
+            // Once we are on setup page, consume onboarding redirect intent
+            // and skip post-login auto-routing to avoid setup-page loops.
             setForceSetup2FAAfterLogin(false);
-            forceSetup2FAAfterLogin = false;
+            setForceRedirectAfterLogin(false);
+            return;
         }
 
         if (forceSetup2FAAfterLogin && !currentHash.startsWith(TWO_FACTOR_HASH_PREFIX)) {
