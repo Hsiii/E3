@@ -642,6 +642,15 @@
     function inject2FASetupGuide() {
         let guide = document.querySelector('#eze3-2fa-guide');
         const msg = (key, fallback) => chrome.i18n.getMessage(key) || fallback;
+        const guideHtml = [
+            `<div style="font-weight:700; margin-bottom:6px;">${msg('guide2FATitle', 'EZE3 2FA Setup Guide')}</div>`,
+            `<div style="font-size:12px; color:#334155; margin-bottom:6px;">${msg('guide2FASubtitle', 'Complete both EZE3 setup and official Google Authenticator setup for backup.')}</div>`,
+            '<ol style="padding-left:18px; margin:0;">',
+            `<li>${msg('guide2FAStep1', 'If your 2FA is already configured, cancel it first.')}</li>`,
+            `<li>${msg('guide2FAStep2', 'Click "Save 2FA for EZE3" below to save the QR code into EZE3 for auto-fill.')}</li>`,
+            `<li>${msg('guide2FAStep3', 'Scan the QR code with Google Authenticator on your phone and finish the portal setup.')}</li>`,
+            '</ol>'
+        ].join('');
 
         if (!(guide instanceof HTMLDivElement)) {
             guide = document.createElement('div');
@@ -656,17 +665,13 @@
                 'font-size: 13px',
                 'line-height: 1.45'
             ].join(';');
+
+            guide.innerHTML = guideHtml;
         }
 
-        guide.innerHTML = [
-            `<div style="font-weight:700; margin-bottom:6px;">${msg('guide2FATitle', 'EZE3 2FA Setup Guide')}</div>`,
-            `<div style="font-size:12px; color:#334155; margin-bottom:6px;">${msg('guide2FASubtitle', 'Complete both EZE3 setup and official Google Authenticator setup for backup.')}</div>`,
-            '<ol style="padding-left:18px; margin:0;">',
-            `<li>${msg('guide2FAStep1', 'If your 2FA is already configured, cancel it first.')}</li>`,
-            `<li>${msg('guide2FAStep2', 'Click "Save 2FA for EZE3" below to save the QR code into EZE3 for auto-fill.')}</li>`,
-            `<li>${msg('guide2FAStep3', 'Scan the QR code with Google Authenticator on your phone and finish the portal setup.')}</li>`,
-            '</ol>'
-        ].join('');
+        if (guide.innerHTML !== guideHtml) {
+            guide.innerHTML = guideHtml;
+        }
 
         const container = get2FASetupGuideContainer();
         if (!container) return;
