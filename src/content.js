@@ -16,6 +16,8 @@
     let portalErrorObserverStarted = false;
     let tokenErrorRecoveryCount = 0;
     let extensionContextInvalidated = false;
+    let e3RedirectTriggered = false;
+    let e3LinkObserver = null;
 
     function markExtensionContextInvalidated(error) {
         const message = String(error?.message || '').toLowerCase();
@@ -678,6 +680,11 @@
 
     function handlePostLogin() {
         const currentHash = window.location.hash;
+
+        if (currentHash !== '#/links/nycu' && e3LinkObserver) {
+            e3LinkObserver.disconnect();
+            e3LinkObserver = null;
+        }
         
         // Dashboard redirection
         const isDashboard = currentHash === '' || currentHash === '#/' || currentHash === '#/home';
@@ -688,13 +695,22 @@
 
         // Automated link picking on the transition page
         if (currentHash === '#/links/nycu') {
+            if (e3RedirectTriggered) {
+                return;
+            }
+
             log('Locating New E3 redirect...');
             const e3LinkSelector = 'a[href="#/redirect/newe3p"]';
-            let redirectFired = false; // Guard against double-fire
             
             const clickAndClose = (element) => {
-                if (redirectFired) return;
-                redirectFired = true;
+                if (e3RedirectTriggered) return;
+                e3RedirectTriggered = true;
+
+                if (e3LinkObserver) {
+                    e3LinkObserver.disconnect();
+                    e3LinkObserver = null;
+                }
+
                 log('Redirecting to E3 now...');
                 element.click();
                 
@@ -709,17 +725,21 @@
                 }, 1000); 
             };
 
-            const e3LinkObserver = new MutationObserver(() => {
-                const e3Link = document.querySelector(e3LinkSelector);
-                if (e3Link) {
-                    clickAndClose(e3Link);
-                    e3LinkObserver.disconnect();
-                }
-            });
-            e3LinkObserver.observe(document.body, { childList: true, subtree: true });
-
             const initialE3Link = document.querySelector(e3LinkSelector);
-            if (initialE3Link) clickAndClose(initialE3Link);
+            if (initialE3Link) {
+                clickAndClose(initialE3Link);
+                return;
+            }
+
+            if (!e3LinkObserver) {
+                e3LinkObserver = new MutationObserver(() => {
+                    const e3Link = document.querySelector(e3LinkSelector);
+                    if (e3Link) {
+                        clickAndClose(e3Link);
+                    }
+                });
+                e3LinkObserver.observe(document.body, { childList: true, subtree: true });
+            }
         }
     }
 
