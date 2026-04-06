@@ -8,7 +8,7 @@
   --eze3-color-guide-subtitle: #334155;
   --eze3-radius-md: 8px;
   --eze3-font-size-sm: 12px;
-  --eze3-button-padding-x: 12px;
+  --eze3-button-padding-x: 16px;
   --eze3-letter-spacing: 0.02em;
 }
 
@@ -48,6 +48,7 @@
 #eze3-save-2fa-btn,
 #eze3-save-btn {
   width: 100%;
+  height: 48px;
   padding: 0 var(--eze3-button-padding-x);
   border: none;
   border-radius: var(--eze3-radius-md);
@@ -60,22 +61,7 @@
   align-items: center;
   justify-content: flex-start;
   text-align: left;
-}
-
-#eze3-save-2fa-btn {
-  height: 44px;
-  font-weight: 700;
-}
-
-#eze3-save-2fa-btn.is-saved {
-  color: var(--eze3-color-text-light);
-}
-
-#eze3-save-btn {
-  height: 48px;
   font-weight: 600;
-  transition: all 0.15s ease;
-  text-transform: uppercase;
 }
 
 #eze3-save-btn:not(:disabled):hover {
@@ -90,5 +76,4 @@
 #eze3-save-btn .eze3-save-btn-icon {
   display: flex;
   align-items: center;
-  margin-left: 16px;
 }
