@@ -629,7 +629,17 @@
         wrapper.remove();
     }
 
-    function inject2FASetupGuide(qrImage) {
+    function get2FASetupGuideContainer() {
+        return (
+            document.querySelector('.app-main .app-container') ||
+            document.querySelector('.app-container') ||
+            document.querySelector('.app-main') ||
+            document.querySelector('#app') ||
+            document.body
+        );
+    }
+
+    function inject2FASetupGuide() {
         let guide = document.querySelector('#eze3-2fa-guide');
 
         if (!(guide instanceof HTMLDivElement)) {
@@ -657,8 +667,18 @@
             ].join('');
         }
 
-        if (qrImage.previousElementSibling !== guide) {
-            qrImage.insertAdjacentElement('beforebegin', guide);
+        const container = get2FASetupGuideContainer();
+        if (!container) return;
+
+        if (guide.parentElement !== container || container.firstElementChild !== guide) {
+            container.prepend(guide);
+        }
+    }
+
+    function remove2FASetupGuide() {
+        const guide = document.querySelector('#eze3-2fa-guide');
+        if (guide instanceof HTMLElement) {
+            guide.remove();
         }
     }
 
@@ -707,7 +727,7 @@
             buttonWrapper.appendChild(saveBtn);
         }
 
-        inject2FASetupGuide(qrImage);
+        inject2FASetupGuide();
         placeSave2FAButton(qrImage, buttonWrapper, saveBtn);
 
         const setButtonText = (messageKey, fallbackText) => {
@@ -756,13 +776,11 @@
     function watchTwoFactorSettingsPage() {
         const triggerInject = () => {
             if (isTwoFactorSettingsPage()) {
+                inject2FASetupGuide();
                 injectSave2FAButton();
             } else {
                 removeSave2FAButton();
-                const guide = document.querySelector('#eze3-2fa-guide');
-                if (guide instanceof HTMLElement) {
-                    guide.remove();
-                }
+                remove2FASetupGuide();
             }
         };
 
