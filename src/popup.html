@@ -35,6 +35,63 @@
       margin-bottom: 16px;
     }
 
+    .password-field {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .password-field input {
+      padding-right: 34px;
+    }
+
+    .password-toggle {
+      position: absolute;
+      right: 0;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 28px;
+      height: 28px;
+      border: none;
+      background: transparent;
+      color: #94a3b8;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      border-radius: 4px;
+      padding: 0;
+    }
+
+    .password-toggle:hover {
+      color: #f1a856;
+      background-color: rgba(241, 168, 86, 0.1);
+    }
+
+    .password-toggle:focus-visible {
+      outline: 2px solid #f1a856;
+      outline-offset: 1px;
+    }
+
+    .password-toggle svg {
+      width: 16px;
+      height: 16px;
+      stroke-width: 2.2;
+      pointer-events: none;
+    }
+
+    .password-toggle .password-icon-hide {
+      display: none;
+    }
+
+    .password-toggle[data-visible='true'] .password-icon-show {
+      display: none;
+    }
+
+    .password-toggle[data-visible='true'] .password-icon-hide {
+      display: block;
+    }
+
     label {
       display: block;
       font-size: 0.7rem;
@@ -68,7 +125,7 @@
       margin-top: 20px;
     }
 
-    button {
+    .button-group button {
       flex: 1;
       padding: 10px;
       border: none;
@@ -116,7 +173,20 @@
 
   <div class="form-group">
     <label data-i18n="labelPassword">Password</label>
-    <input type="password" id="password" data-i18n-placeholder="placeholderPassword">
+    <div class="password-field">
+      <input type="password" id="password" data-i18n-placeholder="placeholderPassword">
+      <button
+        type="button"
+        id="togglePassword"
+        class="password-toggle"
+        data-visible="false"
+        aria-label="Show password"
+        title="Show password"
+      >
+        <i data-lucide="eye" class="password-icon-show"></i>
+        <i data-lucide="eye-closed" class="password-icon-hide"></i>
+      </button>
+    </div>
   </div>
 
   <div id="message" class="message"></div>
@@ -126,6 +196,7 @@
     <button id="save" data-i18n="btnSave">Save</button>
   </div>
 
+  <script src="vendor/lucide.min.js"></script>
   <script src="i18n.js"></script>
   <script src="popup.js"></script>
 </body>

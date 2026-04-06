@@ -15,6 +15,14 @@
     "message": "Password",
     "description": "Password field label"
   },
+  "labelShowPassword": {
+    "message": "Show password",
+    "description": "Accessible label for password visibility toggle"
+  },
+  "labelHidePassword": {
+    "message": "Hide password",
+    "description": "Accessible label for password visibility toggle"
+  },
   "placeholderUsername": {
     "message": "Portal Account",
     "description": "Username input placeholder"

@@ -7,10 +7,34 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const usernameInput = document.getElementById('username');
     const passwordInput = document.getElementById('password');
+    const togglePasswordBtn = document.getElementById('togglePassword');
     const saveBtn = document.getElementById('save');
     const closeBtn = document.getElementById('close');
 
     let originalSaveText = t('btnSave');
+    let isPasswordVisible = false;
+
+    if (window.lucide && typeof window.lucide.createIcons === 'function') {
+        window.lucide.createIcons();
+    }
+
+    const updatePasswordVisibility = () => {
+        passwordInput.type = isPasswordVisible ? 'text' : 'password';
+        togglePasswordBtn.dataset.visible = String(isPasswordVisible);
+
+        const visibilityLabel = isPasswordVisible
+            ? t('labelHidePassword')
+            : t('labelShowPassword');
+        togglePasswordBtn.setAttribute('aria-label', visibilityLabel);
+        togglePasswordBtn.title = visibilityLabel;
+    };
+
+    togglePasswordBtn.addEventListener('click', () => {
+        isPasswordVisible = !isPasswordVisible;
+        updatePasswordVisibility();
+    });
+
+    updatePasswordVisibility();
 
     // Load saved credentials
     chrome.storage.local.get(['nycu_username', 'nycu_password'], (result) => {

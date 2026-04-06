@@ -5,5 +5,8 @@
   "private": true,
   "scripts": {
     "build": "rm -rf dist && mkdir -p dist && cd src && zip -r ../dist/EZE3.zip . -x '*.DS_Store'"
+  },
+  "dependencies": {
+    "lucide": "^1.7.0"
   }
 }
