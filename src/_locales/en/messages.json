@@ -70,5 +70,25 @@
   "msg2FASaveFailed": {
     "message": "2FA QR parse failed",
     "description": "Failed to parse or save 2FA QR"
+  },
+  "guide2FATitle": {
+    "message": "EZE3 2FA Setup Guide",
+    "description": "Title of the 2FA setup guide block"
+  },
+  "guide2FASubtitle": {
+    "message": "Complete both EZE3 setup and official Google Authenticator setup for backup.",
+    "description": "Subtitle of the 2FA setup guide block"
+  },
+  "guide2FAStep1": {
+    "message": "If your 2FA is already configured, cancel it first.",
+    "description": "First step in 2FA setup guide"
+  },
+  "guide2FAStep2": {
+    "message": "Click \"Save 2FA for EZE3\" below to save the QR code into EZE3 for auto-fill.",
+    "description": "Second step in 2FA setup guide"
+  },
+  "guide2FAStep3": {
+    "message": "Scan the QR code with Google Authenticator on your phone and finish the portal setup.",
+    "description": "Third step in 2FA setup guide"
   }
 }

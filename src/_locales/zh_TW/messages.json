@@ -70,5 +70,25 @@
   "msg2FASaveFailed": {
     "message": "2FA QR 解析失敗",
     "description": "Failed to parse or save 2FA QR"
+  },
+  "guide2FATitle": {
+    "message": "EZE3 二階段驗證設定指引",
+    "description": "Title of the 2FA setup guide block"
+  },
+  "guide2FASubtitle": {
+    "message": "請同時完成 EZE3 與 Google Authenticator 官方流程，避免單一裝置遺失造成無法登入。",
+    "description": "Subtitle of the 2FA setup guide block"
+  },
+  "guide2FAStep1": {
+    "message": "若此帳號已設定過二階段驗證，請先取消目前設定再重新綁定。",
+    "description": "First step in 2FA setup guide"
+  },
+  "guide2FAStep2": {
+    "message": "點擊下方「儲存 EZE3 二階段驗證」，將 QR 內容存入 EZE3 供自動填碼使用。",
+    "description": "Second step in 2FA setup guide"
+  },
+  "guide2FAStep3": {
+    "message": "同時用手機的 Google Authenticator 掃描 QR，完成學校入口網站的官方綁定流程。",
+    "description": "Third step in 2FA setup guide"
   }
 }
