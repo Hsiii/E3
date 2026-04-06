@@ -11,6 +11,16 @@
     let activeOtpField = null;
     let cachedTotpSecret = null;
     let cachedTotpKeyPromise = null;
+    let lastSubmittedOtpCode = null;
+    let postLoginObserverStarted = false;
+
+    function isElementClickable(element) {
+        if (!element) return false;
+        if (!(element instanceof HTMLElement)) return false;
+        if (element.hasAttribute('disabled')) return false;
+        if (element.getAttribute('aria-disabled') === 'true') return false;
+        return isVisible(element);
+    }
 
     function decodeBase32(secret) {
         const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
@@ -181,6 +191,37 @@
         return rect.width > 0 && rect.height > 0;
     }
 
+    function getOtpConfirmButton(otpField) {
+        const messageBox = otpField?.closest('.el-message-box');
+        const scopedButton = messageBox?.querySelector('.el-message-box__btns button.el-button--primary');
+        if (scopedButton instanceof HTMLButtonElement && isElementClickable(scopedButton)) {
+            return scopedButton;
+        }
+
+        const fallbackButton = document.querySelector('.el-message-box__btns button.el-button--primary');
+        if (fallbackButton instanceof HTMLButtonElement && isElementClickable(fallbackButton)) {
+            return fallbackButton;
+        }
+
+        return null;
+    }
+
+    function submitOtpIfReady(otpField, otpCode) {
+        if (!otpCode || !otpField) return;
+        if (otpField.value !== otpCode) return;
+        if (lastSubmittedOtpCode === otpCode) return;
+
+        const confirmBtn = getOtpConfirmButton(otpField);
+        if (!confirmBtn) return;
+
+        lastSubmittedOtpCode = otpCode;
+        setTimeout(() => {
+            if (!isElementClickable(confirmBtn)) return;
+            confirmBtn.click();
+            log('2FA OTP submitted automatically.');
+        }, 120);
+    }
+
     function getOtpInput() {
         const selectors = [
             '#otp',
@@ -204,19 +245,19 @@
 
     async function fillOtpField(field, secret) {
         const currentCode = await generateTotp(secret);
-        if (!currentCode) return;
+        if (!currentCode) return null;
 
         const lastAutofill = field.dataset.eze3LastOtp || '';
         const shouldFill = field.value.trim() === '' || field.value === lastAutofill;
 
-        if (!shouldFill) {
-            return;
+        if (shouldFill) {
+            field.value = currentCode;
+            field.dataset.eze3LastOtp = currentCode;
+            field.dispatchEvent(new Event('input', { bubbles: true }));
+            field.dispatchEvent(new Event('change', { bubbles: true }));
         }
 
-        field.value = currentCode;
-        field.dataset.eze3LastOtp = currentCode;
-        field.dispatchEvent(new Event('input', { bubbles: true }));
-        field.dispatchEvent(new Event('change', { bubbles: true }));
+        return currentCode;
     }
 
     function startOtpAutoFill(field) {
@@ -236,12 +277,31 @@
                 if (!secret || !(field instanceof HTMLInputElement) || !document.contains(field)) {
                     return;
                 }
-                await fillOtpField(field, secret);
+                const otpCode = await fillOtpField(field, secret);
+                submitOtpIfReady(field, otpCode);
             });
         };
 
         tick();
         otpFillTimer = setInterval(tick, 1000);
+    }
+
+    function ensurePostLoginObserver() {
+        if (postLoginObserverStarted) return;
+
+        const runPostLoginWhenReady = () => {
+            if (!document.querySelector('#account')) {
+                handlePostLogin();
+            }
+        };
+
+        const observer = new MutationObserver(() => {
+            runPostLoginWhenReady();
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+        postLoginObserverStarted = true;
+
+        runPostLoginWhenReady();
     }
 
     function monitorFor2FA() {
@@ -272,9 +332,53 @@
         );
     }
 
+    function positionSave2FAButton(qrImage, wrapper, saveBtn) {
+        const rect = qrImage.getBoundingClientRect();
+        wrapper.style.left = `${Math.max(8, window.scrollX + rect.left)}px`;
+        wrapper.style.top = `${window.scrollY + rect.bottom + 10}px`;
+        wrapper.style.width = `${Math.max(180, Math.round(rect.width))}px`;
+        saveBtn.style.width = '100%';
+        saveBtn.style.justifyContent = 'flex-start';
+        saveBtn.style.textAlign = 'left';
+        saveBtn.style.paddingLeft = '12px';
+    }
+
+    function attach2FAButtonPositionTracking(qrImage, wrapper, saveBtn) {
+        if (wrapper.dataset.eze3PositionTracked === 'true') return;
+
+        const updatePosition = () => {
+            if (!document.contains(qrImage) || !document.contains(wrapper)) return;
+            positionSave2FAButton(qrImage, wrapper, saveBtn);
+        };
+
+        window.addEventListener('scroll', updatePosition, { passive: true });
+        window.addEventListener('resize', updatePosition);
+
+        const observer = new MutationObserver(() => {
+            updatePosition();
+        });
+        observer.observe(document.body, { childList: true, subtree: true, attributes: true });
+
+        wrapper.dataset.eze3PositionTracked = 'true';
+        wrapper.dataset.eze3CleanupAttached = 'true';
+        wrapper.__eze3Cleanup = () => {
+            window.removeEventListener('scroll', updatePosition);
+            window.removeEventListener('resize', updatePosition);
+            observer.disconnect();
+        };
+    }
+
+    function removeSave2FAButton() {
+        const wrapper = document.querySelector('#eze3-save-2fa-wrap');
+        if (!(wrapper instanceof HTMLElement)) return;
+        if (typeof wrapper.__eze3Cleanup === 'function') {
+            wrapper.__eze3Cleanup();
+        }
+        wrapper.remove();
+    }
+
     function injectSave2FAButton() {
         if (!isTwoFactorSettingsPage()) return;
-        if (document.querySelector('#eze3-save-2fa-btn')) return;
 
         const qrImage = document.querySelector(
             'img[src*="quickchart.io/qr"][src*="text=otpauth"], img[src*="quickchart.io/qr"][src*="otpauth%3A%2F%2F"], img[src*="quickchart.io/qr"]'
@@ -283,39 +387,53 @@
             return;
         }
 
-        const buttonWrapper = document.createElement('div');
-        buttonWrapper.id = 'eze3-save-2fa-wrap';
-        buttonWrapper.style.cssText = [
-            'display: flex',
-            'justify-content: center',
-            'margin-top: 12px',
-            'margin-bottom: 12px'
-        ].join(';');
+        let buttonWrapper = document.querySelector('#eze3-save-2fa-wrap');
+        let saveBtn = document.querySelector('#eze3-save-2fa-btn');
 
-        const saveBtn = document.createElement('button');
-        saveBtn.id = 'eze3-save-2fa-btn';
-        saveBtn.type = 'button';
-        saveBtn.textContent = chrome.i18n.getMessage('btnSave2FAInPage') || 'Save 2FA for EZE3';
-        saveBtn.style.cssText = [
-            'height: 44px',
-            'min-width: 220px',
-            'max-width: 300px',
-            'padding: 0 16px',
-            'border: none',
-            'border-radius: 8px',
-            'background: #f1a856',
-            'color: #0f172a',
-            'font-size: 13px',
-            'font-weight: 700',
-            'letter-spacing: 0.02em',
-            'cursor: pointer',
-            'box-shadow: 0 6px 20px rgba(0,0,0,0.2)'
-        ].join(';');
+        if (!(buttonWrapper instanceof HTMLDivElement) || !(saveBtn instanceof HTMLButtonElement)) {
+            buttonWrapper = document.createElement('div');
+            buttonWrapper.id = 'eze3-save-2fa-wrap';
+            buttonWrapper.style.cssText = [
+                'position: absolute',
+                'z-index: 2147483646'
+            ].join(';');
+
+            saveBtn = document.createElement('button');
+            saveBtn.id = 'eze3-save-2fa-btn';
+            saveBtn.type = 'button';
+            saveBtn.textContent = chrome.i18n.getMessage('btnSave2FAInPage') || 'Save 2FA for EZE3';
+            saveBtn.style.cssText = [
+                'height: 44px',
+                'padding: 0 16px',
+                'border: none',
+                'border-radius: 8px',
+                'background: #f1a856',
+                'color: #0f172a',
+                'font-size: 13px',
+                'font-weight: 700',
+                'letter-spacing: 0.02em',
+                'cursor: pointer',
+                'box-shadow: 0 6px 20px rgba(0,0,0,0.2)',
+                'display: inline-flex',
+                'align-items: center'
+            ].join(';');
+
+            buttonWrapper.appendChild(saveBtn);
+            document.body.appendChild(buttonWrapper);
+        }
+
+        positionSave2FAButton(qrImage, buttonWrapper, saveBtn);
+        attach2FAButtonPositionTracking(qrImage, buttonWrapper, saveBtn);
 
         const setButtonText = (messageKey, fallbackText) => {
             saveBtn.textContent = chrome.i18n.getMessage(messageKey) || fallbackText;
         };
 
+        if (saveBtn.dataset.eze3Bound === 'true') {
+            return;
+        }
+
+        saveBtn.dataset.eze3Bound = 'true';
         saveBtn.addEventListener('click', async () => {
             saveBtn.disabled = true;
             setButtonText('btnParsing2FA', 'Parsing 2FA QR...');
@@ -343,20 +461,18 @@
                 }
 
                 setButtonText('msg2FASaved', '2FA saved');
-                saveBtn.style.background = '#24a148';
                 saveBtn.style.color = '#ffffff';
                 saveBtn.disabled = false;
             });
         });
-
-        buttonWrapper.appendChild(saveBtn);
-        qrImage.insertAdjacentElement('afterend', buttonWrapper);
     }
 
     function watchTwoFactorSettingsPage() {
         const triggerInject = () => {
             if (isTwoFactorSettingsPage()) {
                 injectSave2FAButton();
+            } else {
+                removeSave2FAButton();
             }
         };
 
@@ -522,22 +638,13 @@
                 // Register the post-login navigation handler BEFORE clicking login
                 // so the hashchange that follows is captured.
                 window.addEventListener('hashchange', handlePostLogin);
+                ensurePostLoginObserver();
                 monitorFor2FA();
 
                 // Trigger login
                 setTimeout(() => {
                     fillLogin(username, password);
 
-                    // hashchange alone is unreliable if the hash doesn't change after auth.
-                    // Watch for #account disappearing — that's the real signal login succeeded.
-                    const loginSuccessObserver = new MutationObserver(() => {
-                        if (!document.querySelector('#account')) {
-                            loginSuccessObserver.disconnect();
-                            log('Login form gone. Triggering post-login navigation...');
-                            handlePostLogin();
-                        }
-                    });
-                    loginSuccessObserver.observe(document.body, { childList: true, subtree: true });
                 }, 300);
             });
         };
@@ -566,6 +673,7 @@
             handlePostLogin();
         }
         monitorFor2FA();
+        ensurePostLoginObserver();
         window.addEventListener('hashchange', handlePostLogin);
     }
 
