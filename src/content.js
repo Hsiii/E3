@@ -20,6 +20,7 @@
     let e3LinkObserver = null;
     let navigationRecoveryListenersAttached = false;
     const FORCE_REDIRECT_AFTER_LOGIN_KEY = 'eze3_force_redirect_after_login';
+    const FORCE_SETUP_2FA_AFTER_LOGIN_KEY = 'eze3_force_setup_2fa_after_login';
 
     function markExtensionContextInvalidated(error) {
         const message = String(error?.message || '').toLowerCase();
@@ -115,12 +116,56 @@
         }
     }
 
-    function resetE3RedirectState() {
+    function setForceSetup2FAAfterLogin(enabled) {
+        try {
+            if (enabled) {
+                sessionStorage.setItem(FORCE_SETUP_2FA_AFTER_LOGIN_KEY, '1');
+            } else {
+                sessionStorage.removeItem(FORCE_SETUP_2FA_AFTER_LOGIN_KEY);
+            }
+        } catch (error) {
+            log('Unable to persist 2FA setup flag:', error);
+        }
+    }
+
+    function shouldForceSetup2FAAfterLogin() {
+        try {
+            return sessionStorage.getItem(FORCE_SETUP_2FA_AFTER_LOGIN_KEY) === '1';
+        } catch (error) {
+            log('Unable to read 2FA setup flag:', error);
+            return false;
+        }
+    }
+
+    function configurePostLoginTarget(has2FASecret) {
         e3RedirectTriggered = false;
-        setForceRedirectAfterLogin(false);
+        setForceSetup2FAAfterLogin(!has2FASecret);
+        setForceRedirectAfterLogin(Boolean(has2FASecret));
+    }
+
+    function preparePostLoginTarget(onReady) {
+        const ok = safeStorageGet([OTP_STORAGE_KEY], (result) => {
+            const has2FASecret = Boolean(result[OTP_STORAGE_KEY]);
+            configurePostLoginTarget(has2FASecret);
+            if (onReady) onReady(has2FASecret);
+        });
+
+        if (!ok) {
+            configurePostLoginTarget(true);
+            if (onReady) onReady(true);
+        }
+    }
+
+    function resetE3RedirectState(clearFlowIntent = false) {
+        e3RedirectTriggered = false;
         if (e3LinkObserver) {
             e3LinkObserver.disconnect();
             e3LinkObserver = null;
+        }
+
+        if (clearFlowIntent) {
+            setForceRedirectAfterLogin(false);
+            setForceSetup2FAAfterLogin(false);
         }
     }
 
@@ -520,8 +565,7 @@
 
         const runPostLoginWhenReady = () => {
             if (document.querySelector('#account')) {
-                // Login page means a new auth cycle can happen after logout.
-                resetE3RedirectState();
+                resetE3RedirectState(false);
                 return;
             }
 
@@ -585,6 +629,39 @@
         wrapper.remove();
     }
 
+    function inject2FASetupGuide(qrImage) {
+        let guide = document.querySelector('#eze3-2fa-guide');
+
+        if (!(guide instanceof HTMLDivElement)) {
+            guide = document.createElement('div');
+            guide.id = 'eze3-2fa-guide';
+            guide.style.cssText = [
+                'margin-bottom: 12px',
+                'padding: 12px 14px',
+                'border: 1px solid #1e3a8a',
+                'border-radius: 8px',
+                'background: #eff6ff',
+                'color: #0f172a',
+                'font-size: 13px',
+                'line-height: 1.45'
+            ].join(';');
+
+            guide.innerHTML = [
+                '<div style="font-weight:700; margin-bottom:6px;">EZE3 2FA Setup Guide</div>',
+                '<div style="font-size:12px; color:#334155; margin-bottom:6px;">First-time users: complete both official setup and EZE3 backup.</div>',
+                '<ol style="padding-left:18px; margin:0;">',
+                '<li>If this page says 2FA is already configured, cancel/reset it first.</li>',
+                '<li>Scan the QR code with Google Authenticator on your phone and finish the portal setup.</li>',
+                '<li>Click "Save 2FA for EZE3" below to save the same secret into EZE3 for auto-fill backup.</li>',
+                '</ol>'
+            ].join('');
+        }
+
+        if (qrImage.previousElementSibling !== guide) {
+            qrImage.insertAdjacentElement('beforebegin', guide);
+        }
+    }
+
     function injectSave2FAButton() {
         if (!isTwoFactorSettingsPage()) return;
 
@@ -630,6 +707,7 @@
             buttonWrapper.appendChild(saveBtn);
         }
 
+        inject2FASetupGuide(qrImage);
         placeSave2FAButton(qrImage, buttonWrapper, saveBtn);
 
         const setButtonText = (messageKey, fallbackText) => {
@@ -670,6 +748,7 @@
                 setButtonText('msg2FASaved', '2FA saved');
                 saveBtn.style.color = '#ffffff';
                 saveBtn.disabled = false;
+                setForceSetup2FAAfterLogin(false);
             });
         });
     }
@@ -680,6 +759,10 @@
                 injectSave2FAButton();
             } else {
                 removeSave2FAButton();
+                const guide = document.querySelector('#eze3-2fa-guide');
+                if (guide instanceof HTMLElement) {
+                    guide.remove();
+                }
             }
         };
 
@@ -707,7 +790,11 @@
         if (accountField && passwordField) {
             log('Initiating automation...');
             e3RedirectTriggered = false;
-            setForceRedirectAfterLogin(true);
+            if (shouldForceSetup2FAAfterLogin()) {
+                setForceRedirectAfterLogin(false);
+            } else {
+                setForceRedirectAfterLogin(true);
+            }
             accountField.value = username;
             passwordField.value = password;
 
@@ -727,10 +814,11 @@
         const isLoginPage = Boolean(document.querySelector('#account'));
 
         if (isLoginPage) {
-            resetE3RedirectState();
+            resetE3RedirectState(false);
             return;
         }
 
+        const forceSetup2FAAfterLogin = shouldForceSetup2FAAfterLogin();
         const forceRedirectAfterLogin = shouldForceRedirectAfterLogin();
 
         if (currentHash !== '#/links/nycu' && e3LinkObserver) {
@@ -738,9 +826,15 @@
             e3LinkObserver = null;
         }
         
+        if (forceSetup2FAAfterLogin && !currentHash.startsWith(TWO_FACTOR_HASH_PREFIX)) {
+            log('First-time setup detected. Navigating to 2FA setup page...');
+            window.location.hash = TWO_FACTOR_HASH_PREFIX;
+            return;
+        }
+
         // Dashboard redirection
         const isDashboard = currentHash === '' || currentHash === '#/' || currentHash === '#/home';
-        const shouldJumpToLinks = isDashboard || forceRedirectAfterLogin;
+        const shouldJumpToLinks = !forceSetup2FAAfterLogin && (isDashboard || forceRedirectAfterLogin);
         if (shouldJumpToLinks && currentHash !== '#/links/nycu') {
             log('Session detected. Navigating to E3...');
             window.location.hash = '#/links/nycu';
@@ -765,6 +859,7 @@
                     e3LinkObserver = null;
                 }
                 setForceRedirectAfterLogin(false);
+                setForceSetup2FAAfterLogin(false);
 
                 log('Redirecting to E3 now...');
                 element.click();
@@ -800,8 +895,9 @@
 
     function recoverFromHistoryNavigation() {
         if (document.querySelector('#account')) {
-            safeStorageGet(['nycu_username', 'nycu_password'], (result) => {
+            safeStorageGet(['nycu_username', 'nycu_password', OTP_STORAGE_KEY], (result) => {
                 if (result.nycu_username && result.nycu_password) {
+                    configurePostLoginTarget(Boolean(result[OTP_STORAGE_KEY]));
                     fillLogin(result.nycu_username, result.nycu_password);
                 }
             });
@@ -908,8 +1004,9 @@
 
                 // Trigger login
                 setTimeout(() => {
-                    fillLogin(username, password);
-
+                    preparePostLoginTarget(() => {
+                        fillLogin(username, password);
+                    });
                 }, 300);
             });
         };
@@ -931,8 +1028,9 @@
         attachNavigationRecoveryListeners();
 
         if (document.querySelector('#account')) {
-            safeStorageGet(['nycu_username', 'nycu_password'], (result) => {
+            safeStorageGet(['nycu_username', 'nycu_password', OTP_STORAGE_KEY], (result) => {
                 if (result.nycu_username && result.nycu_password) {
+                    configurePostLoginTarget(Boolean(result[OTP_STORAGE_KEY]));
                     fillLogin(result.nycu_username, result.nycu_password);
                 }
             });
