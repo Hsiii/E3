@@ -13,6 +13,8 @@
     let cachedTotpKeyPromise = null;
     let lastSubmittedOtpCode = null;
     let postLoginObserverStarted = false;
+    let portalErrorObserverStarted = false;
+    let tokenErrorRecoveryCount = 0;
 
     function isElementClickable(element) {
         if (!element) return false;
@@ -204,6 +206,88 @@
         }
 
         return null;
+    }
+
+    function findTokenAuthErrorDialog() {
+        const dialogs = document.querySelectorAll('.el-message-box');
+        for (const dialog of dialogs) {
+            if (!(dialog instanceof HTMLElement) || !isVisible(dialog)) continue;
+
+            const msgNode = dialog.querySelector('.el-message-box__message');
+            const message = (msgNode?.textContent || '').trim().toLowerCase();
+            if (!message) continue;
+
+            if (message.includes('token auth failed')) {
+                return dialog;
+            }
+        }
+
+        return null;
+    }
+
+    function closeDialog(dialog) {
+        const primaryBtn = dialog.querySelector('.el-message-box__btns button.el-button--primary');
+        if (primaryBtn instanceof HTMLButtonElement && isElementClickable(primaryBtn)) {
+            primaryBtn.click();
+            return true;
+        }
+
+        const closeBtn = dialog.querySelector('.el-message-box__headerbtn');
+        if (closeBtn instanceof HTMLButtonElement && isElementClickable(closeBtn)) {
+            closeBtn.click();
+            return true;
+        }
+
+        const fallbackBtn = dialog.querySelector('.el-message-box__btns button');
+        if (fallbackBtn instanceof HTMLButtonElement && isElementClickable(fallbackBtn)) {
+            fallbackBtn.click();
+            return true;
+        }
+
+        return false;
+    }
+
+    function resumeLoginAfterTokenError() {
+        if (tokenErrorRecoveryCount > 3) return;
+
+        chrome.storage.local.get(['nycu_username', 'nycu_password'], (result) => {
+            if (document.querySelector('#account') && result.nycu_username && result.nycu_password) {
+                fillLogin(result.nycu_username, result.nycu_password);
+                monitorFor2FA();
+                return;
+            }
+
+            handlePostLogin();
+        });
+    }
+
+    function handlePortalTokenErrorDialog() {
+        const dialog = findTokenAuthErrorDialog();
+        if (!dialog) return;
+        if (dialog.dataset.eze3TokenErrorHandled === 'true') return;
+
+        if (!closeDialog(dialog)) return;
+
+        dialog.dataset.eze3TokenErrorHandled = 'true';
+        tokenErrorRecoveryCount += 1;
+        log('Token auth error dialog dismissed automatically.');
+
+        setTimeout(() => {
+            resumeLoginAfterTokenError();
+        }, 250);
+    }
+
+    function monitorForPortalErrors() {
+        if (portalErrorObserverStarted) return;
+        if (window.location.hostname !== 'portal.nycu.edu.tw') return;
+
+        handlePortalTokenErrorDialog();
+
+        const observer = new MutationObserver(() => {
+            handlePortalTokenErrorDialog();
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+        portalErrorObserverStarted = true;
     }
 
     function submitOtpIfReady(otpField, otpCode) {
@@ -679,6 +763,7 @@
 
     // Main deployment logic
     watchTwoFactorSettingsPage();
+    monitorForPortalErrors();
 
     chrome.storage.local.get(['nycu_username', 'nycu_password'], (result) => {
         if (result.nycu_username && result.nycu_password) {
