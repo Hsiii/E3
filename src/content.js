@@ -368,8 +368,14 @@
 
     function submitOtpIfReady(otpField, otpCode) {
         if (!otpCode || !otpField) return;
+        if (isTwoFactorSettingsPage()) return;
         if (otpField.value !== otpCode) return;
         if (lastSubmittedOtpCode === otpCode) return;
+
+        // Avoid submitting right before the TOTP rollover boundary.
+        const secondsIntoPeriod = Math.floor(Date.now() / 1000) % OTP_PERIOD_SECONDS;
+        const secondsLeft = OTP_PERIOD_SECONDS - secondsIntoPeriod;
+        if (secondsLeft <= 3) return;
 
         const confirmBtn = getOtpConfirmButton(otpField);
         if (!confirmBtn) return;
@@ -382,24 +388,50 @@
         }, 120);
     }
 
+    function isLogin2FADialog(dialog) {
+        if (!(dialog instanceof HTMLElement) || !isVisible(dialog)) return false;
+        const text = (dialog.textContent || '').toLowerCase();
+
+        if (!text) return false;
+        if (text.includes('token auth failed')) return false;
+
+        return (
+            text.includes('二階段驗證') ||
+            text.includes('二階段登入') ||
+            text.includes('請輸入驗證碼') ||
+            text.includes('2fa') ||
+            text.includes('otp') ||
+            text.includes('verification code')
+        );
+    }
+
     function getOtpInput() {
+        if (isTwoFactorSettingsPage()) {
+            return null;
+        }
+
+        const dialogs = document.querySelectorAll('.el-message-box');
         const selectors = [
             '#otp',
             '[name="otp"]',
-            'input[placeholder*="驗證碼"]',
-            'input[placeholder*="OTP"]',
-            'input[placeholder*="Code"]',
             '.el-message-box__input .el-input__inner',
             '.el-message-box__content input.el-input__inner',
-            'input[maxlength="6"]'
+            'input[placeholder*="驗證碼"]',
+            'input[placeholder*="OTP"]',
+            'input[placeholder*="Code"]'
         ];
 
-        for (const selector of selectors) {
-            const field = document.querySelector(selector);
-            if (field instanceof HTMLInputElement && isVisible(field)) {
-                return field;
+        for (const dialog of dialogs) {
+            if (!isLogin2FADialog(dialog)) continue;
+
+            for (const selector of selectors) {
+                const field = dialog.querySelector(selector);
+                if (field instanceof HTMLInputElement && isVisible(field)) {
+                    return field;
+                }
             }
         }
+
         return null;
     }
 
@@ -497,48 +529,23 @@
         );
     }
 
-    function positionSave2FAButton(qrImage, wrapper, saveBtn) {
+    function placeSave2FAButton(qrImage, wrapper, saveBtn) {
         const rect = qrImage.getBoundingClientRect();
-        wrapper.style.left = `${Math.max(8, window.scrollX + rect.left)}px`;
-        wrapper.style.top = `${window.scrollY + rect.bottom + 10}px`;
-        wrapper.style.width = `${Math.max(180, Math.round(rect.width))}px`;
+        const width = Math.max(180, Math.round(rect.width) || qrImage.clientWidth || 220);
+        wrapper.style.width = `${width}px`;
         saveBtn.style.width = '100%';
         saveBtn.style.justifyContent = 'flex-start';
         saveBtn.style.textAlign = 'left';
         saveBtn.style.paddingLeft = '12px';
-    }
 
-    function attach2FAButtonPositionTracking(qrImage, wrapper, saveBtn) {
-        if (wrapper.dataset.eze3PositionTracked === 'true') return;
-
-        const updatePosition = () => {
-            if (!document.contains(qrImage) || !document.contains(wrapper)) return;
-            positionSave2FAButton(qrImage, wrapper, saveBtn);
-        };
-
-        window.addEventListener('scroll', updatePosition, { passive: true });
-        window.addEventListener('resize', updatePosition);
-
-        const observer = new MutationObserver(() => {
-            updatePosition();
-        });
-        observer.observe(document.body, { childList: true, subtree: true, attributes: true });
-
-        wrapper.dataset.eze3PositionTracked = 'true';
-        wrapper.dataset.eze3CleanupAttached = 'true';
-        wrapper.__eze3Cleanup = () => {
-            window.removeEventListener('scroll', updatePosition);
-            window.removeEventListener('resize', updatePosition);
-            observer.disconnect();
-        };
+        if (qrImage.nextElementSibling !== wrapper) {
+            qrImage.insertAdjacentElement('afterend', wrapper);
+        }
     }
 
     function removeSave2FAButton() {
         const wrapper = document.querySelector('#eze3-save-2fa-wrap');
         if (!(wrapper instanceof HTMLElement)) return;
-        if (typeof wrapper.__eze3Cleanup === 'function') {
-            wrapper.__eze3Cleanup();
-        }
         wrapper.remove();
     }
 
@@ -559,8 +566,9 @@
             buttonWrapper = document.createElement('div');
             buttonWrapper.id = 'eze3-save-2fa-wrap';
             buttonWrapper.style.cssText = [
-                'position: absolute',
-                'z-index: 2147483646'
+                'display: block',
+                'margin-top: 12px',
+                'margin-bottom: 12px'
             ].join(';');
 
             saveBtn = document.createElement('button');
@@ -584,11 +592,9 @@
             ].join(';');
 
             buttonWrapper.appendChild(saveBtn);
-            document.body.appendChild(buttonWrapper);
         }
 
-        positionSave2FAButton(qrImage, buttonWrapper, saveBtn);
-        attach2FAButtonPositionTracking(qrImage, buttonWrapper, saveBtn);
+        placeSave2FAButton(qrImage, buttonWrapper, saveBtn);
 
         const setButtonText = (messageKey, fallbackText) => {
             saveBtn.textContent = chrome.i18n.getMessage(messageKey) || fallbackText;
