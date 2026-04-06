@@ -24,102 +24,6 @@
     const FORCE_REDIRECT_AFTER_LOGIN_KEY = 'eze3_force_redirect_after_login';
     const FORCE_SETUP_2FA_AFTER_LOGIN_KEY = 'eze3_force_setup_2fa_after_login';
     const ONBOARDING_2FA_FLOW_KEY = 'eze3_onboarding_2fa_flow';
-    const EZE3_COMPONENT_STYLE_ID = 'eze3-component-styles';
-
-    function ensureEze3ComponentStyles() {
-        if (document.getElementById(EZE3_COMPONENT_STYLE_ID)) return;
-
-        const style = document.createElement('style');
-        style.id = EZE3_COMPONENT_STYLE_ID;
-        style.textContent = `
-            #eze3-2fa-guide {
-                margin-bottom: 12px;
-                padding: 12px 14px;
-                border: 1px solid #1e3a8a;
-                border-radius: 8px;
-                background: #eff6ff;
-                color: #0f172a;
-                font-size: 13px;
-                line-height: 1.45;
-            }
-
-            #eze3-2fa-guide .eze3-guide-title {
-                font-weight: 700;
-                margin-bottom: 6px;
-            }
-
-            #eze3-2fa-guide .eze3-guide-subtitle {
-                font-size: 12px;
-                color: #334155;
-                margin-bottom: 6px;
-            }
-
-            #eze3-2fa-guide .eze3-guide-list {
-                padding-left: 18px;
-                margin: 0;
-            }
-
-            #eze3-save-2fa-wrap {
-                display: block;
-                margin-top: 12px;
-                margin-bottom: 12px;
-            }
-
-            #eze3-save-2fa-btn {
-                width: 100%;
-                height: 44px;
-                padding: 0 16px 0 12px;
-                border: none;
-                border-radius: 8px;
-                background: #f1a856;
-                color: #0f172a;
-                font-size: 13px;
-                font-weight: 700;
-                letter-spacing: 0.02em;
-                cursor: pointer;
-                box-shadow: 0 6px 20px rgba(0, 0, 0, 0.2);
-                display: inline-flex;
-                align-items: center;
-                justify-content: flex-start;
-                text-align: left;
-            }
-
-            #eze3-save-2fa-btn.is-saved {
-                color: #ffffff;
-            }
-
-            #eze3-save-btn {
-                background-color: #f1a856;
-                color: #0f172a;
-                border: none;
-                padding: 0 16px;
-                width: 100%;
-                height: 48px;
-                display: flex;
-                justify-content: flex-start;
-                align-items: center;
-                font-size: 14px;
-                font-weight: 600;
-                cursor: pointer;
-                transition: all 0.15s ease;
-                text-transform: uppercase;
-                letter-spacing: 0.02em;
-            }
-
-            #eze3-save-btn .eze3-save-btn-label {
-                flex-grow: 1;
-                text-align: left;
-            }
-
-            #eze3-save-btn .eze3-save-btn-icon {
-                display: flex;
-                align-items: center;
-                margin-left: 16px;
-            }
-        `;
-
-        (document.head || document.documentElement).appendChild(style);
-    }
 
     function markExtensionContextInvalidated(error) {
         const message = String(error?.message || '').toLowerCase();
@@ -758,8 +662,6 @@
     }
 
     function inject2FASetupGuide() {
-        ensureEze3ComponentStyles();
-
         let guide = document.querySelector('#eze3-2fa-guide');
         const msg = (key, fallback) => chrome.i18n.getMessage(key) || fallback;
         const guideHtml = [
@@ -886,7 +788,6 @@
 
     function injectSave2FAButton() {
         if (!isTwoFactorSettingsPage()) return;
-        ensureEze3ComponentStyles();
 
         const qrImage = document.querySelector(
             'img[src*="quickchart.io/qr"][src*="text=otpauth"], img[src*="quickchart.io/qr"][src*="otpauth%3A%2F%2F"], img[src*="quickchart.io/qr"]'
@@ -1134,7 +1035,6 @@
     function injectSaveButton() {
         const buttonGroup = document.querySelector('.button-group');
         if (!buttonGroup || document.querySelector('#eze3-save-btn')) return;
-        ensureEze3ComponentStyles();
 
         log('Injecting save button into portal...');
 
@@ -1142,7 +1042,7 @@
         saveBtn.id = 'eze3-save-btn';
         saveBtn.type = 'button';
 
-        const updateBtn = (text, bgColor) => {
+        const updateBtn = (text) => {
             saveBtn.innerHTML = `
                 <span class="eze3-save-btn-label">${text}</span>
                 <span class="eze3-save-btn-icon">
@@ -1153,23 +1053,10 @@
                     </svg>
                 </span>
             `;
-            if (bgColor) saveBtn.style.backgroundColor = bgColor;
         };
 
         // Initial render
         updateBtn(chrome.i18n.getMessage('btnSaveInPage'));
-        
-        saveBtn.onmouseover = () => {
-            if (!saveBtn.disabled) {
-                saveBtn.style.backgroundColor = '#f5b86b';
-            }
-        };
-        saveBtn.onmouseout = () => {
-            if (!saveBtn.disabled) {
-                const isSuccess = saveBtn.style.backgroundColor === 'rgb(36, 161, 72)'; // #24a148
-                if (!isSuccess) saveBtn.style.backgroundColor = '#f1a856';
-            }
-        };
 
         saveBtn.onclick = () => {
             const usernameInput = document.querySelector('#account');

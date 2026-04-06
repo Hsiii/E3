@@ -29,6 +29,7 @@
         "https://portal.nycu.edu.tw/*",
         "https://e3p.nycu.edu.tw/login/index.php*"
       ],
+      "css": ["content.css"],
       "js": ["content.js"],
       "run_at": "document_idle"
     }
