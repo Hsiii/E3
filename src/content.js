@@ -3,6 +3,345 @@
 (function() {
     const DEBUG = false;
     const log = (...args) => DEBUG && console.log('[EZE3]', ...args);
+    const OTP_STORAGE_KEY = 'nycu_2fa_secret';
+    const TWO_FACTOR_HASH_PREFIX = '#/user/TwoFactorAuthentication';
+    const OTP_DIGITS = 6;
+    const OTP_PERIOD_SECONDS = 30;
+    let otpFillTimer = null;
+    let activeOtpField = null;
+    let cachedTotpSecret = null;
+    let cachedTotpKeyPromise = null;
+
+    function decodeBase32(secret) {
+        const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+        const cleaned = secret.toUpperCase().replace(/[^A-Z2-7]/g, '');
+        if (!cleaned) return null;
+
+        let bits = '';
+        for (const ch of cleaned) {
+            const val = alphabet.indexOf(ch);
+            if (val === -1) return null;
+            bits += val.toString(2).padStart(5, '0');
+        }
+
+        const bytes = [];
+        for (let i = 0; i + 8 <= bits.length; i += 8) {
+            bytes.push(parseInt(bits.slice(i, i + 8), 2));
+        }
+        return new Uint8Array(bytes);
+    }
+
+    function getHotpCounterBuffer(counter) {
+        const buffer = new ArrayBuffer(8);
+        const view = new DataView(buffer);
+        const high = Math.floor(counter / 0x100000000);
+        const low = counter >>> 0;
+        view.setUint32(0, high, false);
+        view.setUint32(4, low, false);
+        return buffer;
+    }
+
+    async function getTotpKey(secret) {
+        if (cachedTotpSecret === secret && cachedTotpKeyPromise) {
+            return cachedTotpKeyPromise;
+        }
+
+        const secretBytes = decodeBase32(secret);
+        if (!secretBytes || secretBytes.length === 0) {
+            return null;
+        }
+
+        cachedTotpSecret = secret;
+        cachedTotpKeyPromise = crypto.subtle.importKey(
+            'raw',
+            secretBytes,
+            { name: 'HMAC', hash: 'SHA-1' },
+            false,
+            ['sign']
+        );
+
+        return cachedTotpKeyPromise;
+    }
+
+    async function generateTotp(secret) {
+        if (!secret) return null;
+
+        const key = await getTotpKey(secret);
+        if (!key) return null;
+
+        const counter = Math.floor(Date.now() / 1000 / OTP_PERIOD_SECONDS);
+        const digestBuffer = await crypto.subtle.sign('HMAC', key, getHotpCounterBuffer(counter));
+        const digest = new Uint8Array(digestBuffer);
+        const offset = digest[digest.length - 1] & 0x0f;
+
+        const binaryCode = (
+            ((digest[offset] & 0x7f) << 24) |
+            (digest[offset + 1] << 16) |
+            (digest[offset + 2] << 8) |
+            digest[offset + 3]
+        );
+
+        return String(binaryCode % (10 ** OTP_DIGITS)).padStart(OTP_DIGITS, '0');
+    }
+
+    function parseOtpAuthUri(uriText) {
+        if (!uriText || !uriText.startsWith('otpauth://')) {
+            return null;
+        }
+
+        try {
+            const parsed = new URL(uriText);
+            if (parsed.protocol !== 'otpauth:') return null;
+            if (!parsed.pathname || !parsed.pathname.startsWith('/')) return null;
+
+            const secret = parsed.searchParams.get('secret');
+            if (!secret) return null;
+
+            return {
+                uri: uriText,
+                secret: secret.replace(/\s+/g, '').toUpperCase(),
+                issuer: parsed.searchParams.get('issuer') || '',
+                label: decodeURIComponent(parsed.pathname.slice(1))
+            };
+        } catch (error) {
+            log('Invalid otpauth URI:', error);
+            return null;
+        }
+    }
+
+    async function detectQrRawValue(element) {
+        if (!('BarcodeDetector' in window)) {
+            return null;
+        }
+
+        try {
+            const detector = new BarcodeDetector({ formats: ['qr_code'] });
+            const results = await detector.detect(element);
+            if (!results || !results.length) return null;
+            return results[0].rawValue || null;
+        } catch (error) {
+            log('QR decode failed:', error);
+            return null;
+        }
+    }
+
+    async function extractOtpAuthUriFromPage() {
+        const directLink = document.querySelector('a[href^="otpauth://"]');
+        if (directLink) {
+            const parsed = parseOtpAuthUri(directLink.getAttribute('href'));
+            if (parsed) return parsed;
+        }
+
+        const bodyText = document.body?.innerText || '';
+        const textMatch = bodyText.match(/otpauth:\/\/totp\/[A-Za-z0-9%._~!$&'()*+,;=:@-]+\?[^\s]+/i);
+        if (textMatch?.[0]) {
+            const parsed = parseOtpAuthUri(textMatch[0]);
+            if (parsed) return parsed;
+        }
+
+        const qrCandidates = [
+            ...document.querySelectorAll('canvas'),
+            ...document.querySelectorAll('img')
+        ];
+
+        for (const candidate of qrCandidates) {
+            if (!(candidate instanceof HTMLCanvasElement) && !(candidate instanceof HTMLImageElement)) {
+                continue;
+            }
+
+            const raw = await detectQrRawValue(candidate);
+            if (!raw) continue;
+
+            const parsed = parseOtpAuthUri(raw.trim());
+            if (parsed) return parsed;
+        }
+
+        return null;
+    }
+
+    function isVisible(element) {
+        if (!element) return false;
+        const rect = element.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+    }
+
+    function getOtpInput() {
+        const selectors = [
+            '#otp',
+            '[name="otp"]',
+            'input[placeholder*="驗證碼"]',
+            'input[placeholder*="OTP"]',
+            'input[placeholder*="Code"]',
+            '.el-message-box__input .el-input__inner',
+            '.el-message-box__content input.el-input__inner',
+            'input[maxlength="6"]'
+        ];
+
+        for (const selector of selectors) {
+            const field = document.querySelector(selector);
+            if (field instanceof HTMLInputElement && isVisible(field)) {
+                return field;
+            }
+        }
+        return null;
+    }
+
+    async function fillOtpField(field, secret) {
+        const currentCode = await generateTotp(secret);
+        if (!currentCode) return;
+
+        const lastAutofill = field.dataset.eze3LastOtp || '';
+        const shouldFill = field.value.trim() === '' || field.value === lastAutofill;
+
+        if (!shouldFill) {
+            return;
+        }
+
+        field.value = currentCode;
+        field.dataset.eze3LastOtp = currentCode;
+        field.dispatchEvent(new Event('input', { bubbles: true }));
+        field.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    function startOtpAutoFill(field) {
+        if (activeOtpField === field && otpFillTimer) {
+            return;
+        }
+
+        activeOtpField = field;
+        if (otpFillTimer) {
+            clearInterval(otpFillTimer);
+            otpFillTimer = null;
+        }
+
+        const tick = () => {
+            chrome.storage.local.get([OTP_STORAGE_KEY], async (result) => {
+                const secret = result[OTP_STORAGE_KEY];
+                if (!secret || !(field instanceof HTMLInputElement) || !document.contains(field)) {
+                    return;
+                }
+                await fillOtpField(field, secret);
+            });
+        };
+
+        tick();
+        otpFillTimer = setInterval(tick, 1000);
+    }
+
+    function monitorFor2FA() {
+        log('Monitoring for security verification...');
+
+        const bindIfOtpPresent = () => {
+            const otpField = getOtpInput();
+            if (otpField) {
+                log('2FA required. Auto-filling OTP code...');
+                otpField.focus();
+                startOtpAutoFill(otpField);
+            }
+        };
+
+        bindIfOtpPresent();
+
+        const observer = new MutationObserver(() => {
+            bindIfOtpPresent();
+        });
+
+        observer.observe(document.body, { childList: true, subtree: true });
+    }
+
+    function isTwoFactorSettingsPage() {
+        return (
+            window.location.hostname === 'portal.nycu.edu.tw' &&
+            window.location.hash.startsWith(TWO_FACTOR_HASH_PREFIX)
+        );
+    }
+
+    function injectSave2FAButton() {
+        if (!isTwoFactorSettingsPage()) return;
+        if (document.querySelector('#eze3-save-2fa-btn')) return;
+
+        const targetContainer =
+            document.querySelector('.app-main') ||
+            document.querySelector('#app') ||
+            document.body;
+
+        const saveBtn = document.createElement('button');
+        saveBtn.id = 'eze3-save-2fa-btn';
+        saveBtn.type = 'button';
+        saveBtn.textContent = chrome.i18n.getMessage('btnSave2FAInPage') || 'Save 2FA for EZE3';
+        saveBtn.style.cssText = [
+            'position: fixed',
+            'right: 24px',
+            'bottom: 24px',
+            'z-index: 2147483646',
+            'height: 44px',
+            'padding: 0 16px',
+            'border: none',
+            'border-radius: 8px',
+            'background: #f1a856',
+            'color: #0f172a',
+            'font-size: 13px',
+            'font-weight: 700',
+            'letter-spacing: 0.02em',
+            'cursor: pointer',
+            'box-shadow: 0 6px 20px rgba(0,0,0,0.2)'
+        ].join(';');
+
+        const setButtonText = (messageKey, fallbackText) => {
+            saveBtn.textContent = chrome.i18n.getMessage(messageKey) || fallbackText;
+        };
+
+        saveBtn.addEventListener('click', async () => {
+            saveBtn.disabled = true;
+            setButtonText('btnParsing2FA', 'Parsing 2FA QR...');
+
+            const otpData = await extractOtpAuthUriFromPage();
+            if (!otpData?.secret) {
+                setButtonText('msg2FASaveFailed', '2FA QR parse failed');
+                saveBtn.disabled = false;
+                setTimeout(() => {
+                    setButtonText('btnSave2FAInPage', 'Save 2FA for EZE3');
+                }, 2000);
+                return;
+            }
+
+            chrome.storage.local.set({
+                [OTP_STORAGE_KEY]: otpData.secret,
+                nycu_2fa_issuer: otpData.issuer,
+                nycu_2fa_label: otpData.label,
+                nycu_2fa_uri: otpData.uri
+            }, () => {
+                if (chrome.runtime.lastError) {
+                    setButtonText('msg2FASaveFailed', '2FA save failed');
+                    saveBtn.disabled = false;
+                    return;
+                }
+
+                setButtonText('msg2FASaved', '2FA saved');
+                saveBtn.style.background = '#24a148';
+                saveBtn.style.color = '#ffffff';
+                saveBtn.disabled = false;
+            });
+        });
+
+        targetContainer.appendChild(saveBtn);
+    }
+
+    function watchTwoFactorSettingsPage() {
+        const triggerInject = () => {
+            if (isTwoFactorSettingsPage()) {
+                injectSave2FAButton();
+            }
+        };
+
+        triggerInject();
+        window.addEventListener('hashchange', triggerInject);
+
+        const observer = new MutationObserver(() => {
+            triggerInject();
+        });
+        observer.observe(document.body, { childList: true, subtree: true });
+    }
 
     // 1. Redirect if we are on the legacy E3 login page
     if (window.location.hostname === 'e3p.nycu.edu.tw' && window.location.pathname.includes('/login/index.php')) {
@@ -30,25 +369,6 @@
                 loginBtn.click();
             }
         }
-    }
-
-    function monitorFor2FA() {
-        log('Monitoring for security verification...');
-        const observer = new MutationObserver(() => {
-            const otpPatterns = ['#otp', '[name="otp"]', 'input[placeholder*="驗證碼"]', 'input[placeholder*="OTP"]', 'input[placeholder*="Code"]'];
-            
-            for (const pattern of otpPatterns) {
-                const otpField = document.querySelector(pattern);
-                if (otpField) {
-                    log('2FA required. Awaiting user input...');
-                    otpField.focus();
-                    observer.disconnect(); // Stop observing once 2FA field found
-                    return;
-                }
-            }
-        });
-
-        observer.observe(document.body, { childList: true, subtree: true });
     }
 
     function handlePostLogin() {
@@ -224,6 +544,8 @@
     }
 
     // Main deployment logic
+    watchTwoFactorSettingsPage();
+
     chrome.storage.local.get(['nycu_username', 'nycu_password'], (result) => {
         if (result.nycu_username && result.nycu_password) {
             startAutomation();

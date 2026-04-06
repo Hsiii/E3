@@ -54,5 +54,21 @@
   "msgSavedInPage": {
     "message": "Credentials saved",
     "description": "Success message in-page"
+  },
+  "btnSave2FAInPage": {
+    "message": "Save 2FA for EZE3",
+    "description": "Button to save 2FA secret from QR"
+  },
+  "btnParsing2FA": {
+    "message": "Parsing 2FA QR...",
+    "description": "Button status while parsing 2FA QR"
+  },
+  "msg2FASaved": {
+    "message": "2FA saved",
+    "description": "2FA secret saved successfully"
+  },
+  "msg2FASaveFailed": {
+    "message": "2FA QR parse failed",
+    "description": "Failed to parse or save 2FA QR"
   }
 }

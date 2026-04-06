@@ -54,5 +54,21 @@
   "msgSavedInPage": {
     "message": "帳密已儲存",
     "description": "Success message in-page"
+  },
+  "btnSave2FAInPage": {
+    "message": "儲存 EZE3 二階段驗證",
+    "description": "Button to save 2FA secret from QR"
+  },
+  "btnParsing2FA": {
+    "message": "正在解析 2FA QR...",
+    "description": "Button status while parsing 2FA QR"
+  },
+  "msg2FASaved": {
+    "message": "2FA 已儲存",
+    "description": "2FA secret saved successfully"
+  },
+  "msg2FASaveFailed": {
+    "message": "2FA QR 解析失敗",
+    "description": "Failed to parse or save 2FA QR"
   }
 }
