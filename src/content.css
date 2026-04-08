@@ -48,12 +48,14 @@
 #eze3-portal-actions {
   display: flex;
   flex-direction: column;
+  width: 100%;
   gap: 8px;
   margin-bottom: 12px;
 }
 
 .eze3-portal-action-row {
   display: block;
+  width: 100%;
 }
 
 #eze3-save-2fa-btn,
