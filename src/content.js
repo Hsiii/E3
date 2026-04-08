@@ -21,6 +21,7 @@
     let navigationRecoveryListenersAttached = false;
     let setupCompletionFlowTriggered = false;
     let setupCompletionCheckInFlight = false;
+    let suppressNativeLoginInterception = false;
     const POST_LOGIN_TARGET_PORTAL = 'portal';
     const POST_LOGIN_TARGET_E3 = 'e3';
     const FORCE_REDIRECT_AFTER_LOGIN_KEY = 'eze3_force_redirect_after_login';
@@ -920,7 +921,12 @@
 
             if (loginBtn) {
                 log('Authenticating...');
-                loginBtn.click();
+                suppressNativeLoginInterception = true;
+                try {
+                    loginBtn.click();
+                } finally {
+                    suppressNativeLoginInterception = false;
+                }
             }
         }
     }
@@ -1050,6 +1056,49 @@
         navigationRecoveryListenersAttached = true;
     }
 
+    function bindNativePortalLogin(target = POST_LOGIN_TARGET_PORTAL) {
+        const nativeLoginBtn = document.querySelector('button.carbon-button--primary');
+        if (!(nativeLoginBtn instanceof HTMLButtonElement)) return;
+        if (nativeLoginBtn.dataset.eze3Bound === 'true') return;
+
+        nativeLoginBtn.dataset.eze3Bound = 'true';
+        nativeLoginBtn.addEventListener('click', (event) => {
+            if (suppressNativeLoginInterception) {
+                return;
+            }
+
+            const usernameInput = document.querySelector('#account');
+            const passwordInput = document.querySelector('#password');
+            const username = usernameInput?.value.trim() || '';
+            const password = passwordInput?.value || '';
+
+            if (!username || !password) {
+                return;
+            }
+
+            event.preventDefault();
+            event.stopImmediatePropagation();
+
+            safeStorageSet({
+                nycu_username: username,
+                nycu_password: password
+            }, (error) => {
+                if (error) {
+                    log('Unable to persist credentials from native portal login:', error.message || error);
+                    return;
+                }
+
+                window.addEventListener('hashchange', handlePostLogin);
+                ensurePostLoginObserver();
+                monitorFor2FA();
+
+                preparePostLoginTarget(target, () => {
+                    fillLogin(username, password, target);
+                });
+            });
+        }, true);
+    }
+
     function injectSaveButton() {
         const buttonGroup = document.querySelector('.button-group');
         if (!buttonGroup || document.querySelector('#eze3-portal-actions')) return;
@@ -1063,11 +1112,6 @@
         saveBtn.id = 'eze3-save-btn';
         saveBtn.type = 'button';
 
-        const loginPortalBtn = document.createElement('button');
-        loginPortalBtn.id = 'eze3-login-btn';
-        loginPortalBtn.type = 'button';
-        loginPortalBtn.textContent = chrome.i18n.getMessage('btnLoginInPage');
-
         const jumpToE3Btn = document.createElement('button');
         jumpToE3Btn.id = 'eze3-jump-btn';
         jumpToE3Btn.type = 'button';
@@ -1075,7 +1119,7 @@
 
         const actionRow = document.createElement('div');
         actionRow.className = 'eze3-portal-action-row';
-        actionRow.append(loginPortalBtn, jumpToE3Btn);
+        actionRow.append(jumpToE3Btn);
 
         actionWrap.append(saveBtn, actionRow);
 
@@ -1094,13 +1138,11 @@
 
         const resetActionLabels = () => {
             updateBtn(chrome.i18n.getMessage('btnSaveInPage'));
-            loginPortalBtn.textContent = chrome.i18n.getMessage('btnLoginInPage');
             jumpToE3Btn.textContent = chrome.i18n.getMessage('btnJumpToE3InPage');
         };
 
         const setButtonsDisabled = (disabled) => {
             saveBtn.disabled = disabled;
-            loginPortalBtn.disabled = disabled;
             jumpToE3Btn.disabled = disabled;
         };
 
@@ -1159,18 +1201,14 @@
 
         const loginWithTarget = (target) => {
             const credentials = getCredentialsFromForm();
-            const triggerBtn = target === POST_LOGIN_TARGET_E3 ? jumpToE3Btn : loginPortalBtn;
+            const triggerBtn = jumpToE3Btn;
             if (!credentials.username || !credentials.password) {
                 showMissingFieldsState(triggerBtn);
                 return;
             }
 
             setButtonsDisabled(true);
-            if (target === POST_LOGIN_TARGET_E3) {
-                jumpToE3Btn.textContent = chrome.i18n.getMessage('btnJumpingToE3InPage');
-            } else {
-                loginPortalBtn.textContent = chrome.i18n.getMessage('btnLoggingInToPortalInPage');
-            }
+            jumpToE3Btn.textContent = chrome.i18n.getMessage('btnJumpingToE3InPage');
 
             persistCredentials(credentials, () => {
                 updateBtn(chrome.i18n.getMessage('msgSavedInPage'));
@@ -1190,7 +1228,6 @@
         };
 
         saveBtn.onclick = saveCurrentCredentials;
-        loginPortalBtn.onclick = () => loginWithTarget(POST_LOGIN_TARGET_PORTAL);
         jumpToE3Btn.onclick = () => loginWithTarget(POST_LOGIN_TARGET_E3);
 
         // Initial render
@@ -1200,6 +1237,7 @@
         const passwordInput = document.querySelector('#password');
         if (usernameInput) usernameInput.addEventListener('input', resetActionLabels);
         if (passwordInput) passwordInput.addEventListener('input', resetActionLabels);
+        bindNativePortalLogin(POST_LOGIN_TARGET_PORTAL);
 
         // Use a MutationObserver to ensure the button group is ready and hasn't been wiped by React
         const observer = new MutationObserver(() => {
@@ -1222,6 +1260,7 @@
         attachNavigationRecoveryListeners();
 
         if (document.querySelector('#account')) {
+            bindNativePortalLogin(POST_LOGIN_TARGET_PORTAL);
             safeStorageGet(['nycu_username', 'nycu_password', OTP_STORAGE_KEY], (result) => {
                 if (result.nycu_username && result.nycu_password) {
                     populateLoginFields(result.nycu_username, result.nycu_password);
