@@ -1127,6 +1127,7 @@
         const saveBtn = document.createElement('button');
         saveBtn.id = 'eze3-save-btn';
         saveBtn.type = 'button';
+        let lastSavedUsername = null;
 
         const jumpToE3Btn = document.createElement('button');
         jumpToE3Btn.id = 'eze3-jump-btn';
@@ -1138,29 +1139,53 @@
 
         actionWrap.append(saveBtn, actionRow);
 
-        const updateBtn = (text) => {
-            saveBtn.innerHTML = `
-                <span class="eze3-save-btn-label">${text}</span>
-                <span class="eze3-save-btn-icon">
+        const updateSaveButton = (text, icon = 'save') => {
+            const iconMarkup = icon === 'check'
+                ? `
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20 6 9 17l-5-5"></path>
+                    </svg>
+                `
+                : `
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v13a2 2 0 0 1-2 2z"></path>
                         <polyline points="17 21 17 13 7 13 7 21"></polyline>
                         <polyline points="7 3 7 8 15 8"></polyline>
                     </svg>
+                `;
+
+            saveBtn.innerHTML = `
+                <span class="eze3-save-btn-label">${text}</span>
+                <span class="eze3-save-btn-icon">
+                    ${iconMarkup}
                 </span>
             `;
         };
 
-        const resetActionLabels = () => {
-            updateBtn(chrome.i18n.getMessage('btnSaveInPage'));
+        const updateJumpButton = (text) => {
             jumpToE3Btn.innerHTML = `
-                <span class="eze3-action-btn-label">${chrome.i18n.getMessage('btnJumpToE3InPage')}</span>
+                <span class="eze3-action-btn-label">${text}</span>
                 <span class="eze3-action-btn-icon" aria-hidden="true">
                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="m9 18 6-6-6-6"></path>
                     </svg>
                 </span>
             `;
+        };
+
+        const resetJumpButton = () => {
+            updateJumpButton(chrome.i18n.getMessage('btnJumpToE3InPage'));
+        };
+
+        const resetSaveButtonIfNeeded = () => {
+            const usernameInput = document.querySelector('#account');
+            const currentUsername = usernameInput?.value.trim() || '';
+            if (lastSavedUsername === null || currentUsername === lastSavedUsername) {
+                return;
+            }
+
+            lastSavedUsername = null;
+            updateSaveButton(chrome.i18n.getMessage('btnSaveInPage'));
         };
 
         const setButtonsDisabled = (disabled) => {
@@ -1182,7 +1207,8 @@
             button.textContent = chrome.i18n.getMessage('msgMissingFields');
             setTimeout(() => {
                 if (!saveBtn.disabled) {
-                    resetActionLabels();
+                    resetSaveButtonIfNeeded();
+                    resetJumpButton();
                 } else {
                     button.textContent = previousText;
                 }
@@ -1195,7 +1221,7 @@
                 nycu_password: password
             }, (error) => {
                 if (error) {
-                    updateBtn(chrome.i18n.getMessage('msgSaveFailed'));
+                    updateSaveButton(chrome.i18n.getMessage('msgSaveFailed'));
                     setButtonsDisabled(false);
                     return;
                 }
@@ -1213,10 +1239,11 @@
             }
 
             setButtonsDisabled(true);
-            updateBtn(chrome.i18n.getMessage('btnSaving'));
+            updateSaveButton(chrome.i18n.getMessage('btnSaving'));
 
             persistCredentials(credentials, () => {
-                updateBtn(chrome.i18n.getMessage('msgSavedInPage'));
+                lastSavedUsername = credentials.username;
+                updateSaveButton(chrome.i18n.getMessage('msgSavedInPage'), 'check');
                 setButtonsDisabled(false);
             });
         };
@@ -1230,17 +1257,10 @@
             }
 
             setButtonsDisabled(true);
-            jumpToE3Btn.innerHTML = `
-                <span class="eze3-action-btn-label">${chrome.i18n.getMessage('btnJumpingToE3InPage')}</span>
-                <span class="eze3-action-btn-icon" aria-hidden="true">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="m9 18 6-6-6-6"></path>
-                    </svg>
-                </span>
-            `;
+            updateJumpButton(chrome.i18n.getMessage('btnJumpingToE3InPage'));
 
             persistCredentials(credentials, () => {
-                updateBtn(chrome.i18n.getMessage('msgSavedInPage'));
+                updateSaveButton(chrome.i18n.getMessage('msgSavedInPage'), 'check');
 
                 // Register the post-login navigation handler BEFORE clicking login
                 // so the hashchange that follows is captured.
@@ -1260,12 +1280,16 @@
         jumpToE3Btn.onclick = () => loginWithTarget(POST_LOGIN_TARGET_E3);
 
         // Initial render
-        resetActionLabels();
+        updateSaveButton(chrome.i18n.getMessage('btnSaveInPage'));
+        resetJumpButton();
 
         const usernameInput = document.querySelector('#account');
         const passwordInput = document.querySelector('#password');
-        if (usernameInput) usernameInput.addEventListener('input', resetActionLabels);
-        if (passwordInput) passwordInput.addEventListener('input', resetActionLabels);
+        if (usernameInput) {
+            usernameInput.addEventListener('input', resetSaveButtonIfNeeded);
+            usernameInput.addEventListener('input', resetJumpButton);
+        }
+        if (passwordInput) passwordInput.addEventListener('input', resetJumpButton);
         bindNativePortalLogin(POST_LOGIN_TARGET_PORTAL);
 
         // Use a MutationObserver to ensure the button group is ready and hasn't been wiped by React
