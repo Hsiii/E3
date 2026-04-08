@@ -24,7 +24,7 @@
     let suppressNativeLoginInterception = false;
     const POST_LOGIN_TARGET_PORTAL = 'portal';
     const POST_LOGIN_TARGET_E3 = 'e3';
-    const PORTAL_TARGET_QUERY_KEY = 'eze3_target';
+    const PENDING_PORTAL_TARGET_KEY = 'eze3_pending_portal_target';
     const FORCE_REDIRECT_AFTER_LOGIN_KEY = 'eze3_force_redirect_after_login';
     const FORCE_SETUP_2FA_AFTER_LOGIN_KEY = 'eze3_force_setup_2fa_after_login';
     const ONBOARDING_2FA_FLOW_KEY = 'eze3_onboarding_2fa_flow';
@@ -896,7 +896,15 @@
     // 1. Redirect if we are on the legacy E3 login page
     if (window.location.hostname === 'e3p.nycu.edu.tw' && window.location.pathname.includes('/login/index.php')) {
         log('Legacy login detected. Redirecting to NYCU Portal...');
-        window.location.href = `https://portal.nycu.edu.tw/?${PORTAL_TARGET_QUERY_KEY}=${POST_LOGIN_TARGET_E3}`;
+        const ok = safeStorageSet({ [PENDING_PORTAL_TARGET_KEY]: POST_LOGIN_TARGET_E3 }, (error) => {
+            if (error) {
+                log('Unable to persist pending E3 target before redirect:', error.message || error);
+            }
+            window.location.href = 'https://portal.nycu.edu.tw/';
+        });
+        if (!ok) {
+            window.location.href = 'https://portal.nycu.edu.tw/';
+        }
         return;
     }
 
@@ -1064,28 +1072,6 @@
         window.addEventListener('pageshow', recoverFromHistoryNavigation);
         window.addEventListener('popstate', recoverFromHistoryNavigation);
         navigationRecoveryListenersAttached = true;
-    }
-
-    function getRequestedPortalTarget() {
-        try {
-            const params = new URLSearchParams(window.location.search);
-            const target = params.get(PORTAL_TARGET_QUERY_KEY);
-            return target === POST_LOGIN_TARGET_E3 ? POST_LOGIN_TARGET_E3 : null;
-        } catch (error) {
-            log('Unable to read requested portal target:', error);
-            return null;
-        }
-    }
-
-    function clearRequestedPortalTarget() {
-        try {
-            const url = new URL(window.location.href);
-            if (!url.searchParams.has(PORTAL_TARGET_QUERY_KEY)) return;
-            url.searchParams.delete(PORTAL_TARGET_QUERY_KEY);
-            history.replaceState(null, '', `${url.pathname}${url.search}${url.hash}`);
-        } catch (error) {
-            log('Unable to clear requested portal target:', error);
-        }
     }
 
     function bindNativePortalLogin(target = POST_LOGIN_TARGET_PORTAL) {
@@ -1330,12 +1316,19 @@
     // Main deployment logic
     watchTwoFactorSettingsPage();
     monitorForPortalErrors();
-    const requestedPortalTarget = getRequestedPortalTarget();
-    if (requestedPortalTarget) {
-        clearRequestedPortalTarget();
-    }
+    safeStorageGet(['nycu_username', 'nycu_password', PENDING_PORTAL_TARGET_KEY], (result) => {
+        const requestedPortalTarget = result[PENDING_PORTAL_TARGET_KEY] === POST_LOGIN_TARGET_E3
+            ? POST_LOGIN_TARGET_E3
+            : null;
 
-    safeStorageGet(['nycu_username', 'nycu_password'], (result) => {
+        if (requestedPortalTarget) {
+            safeStorageSet({ [PENDING_PORTAL_TARGET_KEY]: null }, (error) => {
+                if (error) {
+                    log('Unable to clear pending portal target:', error.message || error);
+                }
+            });
+        }
+
         if (result.nycu_username && result.nycu_password) {
             startAutomation(requestedPortalTarget);
         } else {
