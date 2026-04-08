@@ -91,9 +91,18 @@
     function safeRuntimeSendMessage(message, onDone) {
         if (!hasExtensionContext()) return false;
         try {
-            chrome.runtime.sendMessage(message, () => {
+            chrome.runtime.sendMessage(message, (response) => {
                 if (!hasExtensionContext()) return;
-                if (onDone) onDone(chrome.runtime.lastError || null);
+                const runtimeError = chrome.runtime.lastError || null;
+                if (runtimeError) {
+                    if (onDone) onDone(runtimeError);
+                    return;
+                }
+                if (response && response.status === false) {
+                    if (onDone) onDone(new Error(response.error || 'Runtime action failed.'));
+                    return;
+                }
+                if (onDone) onDone(null);
             });
             return true;
         } catch (error) {
