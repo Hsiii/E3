@@ -59,6 +59,22 @@
     "message": "儲存至 EZE3",
     "description": "Button to save credentials in-page"
   },
+  "btnLoginInPage": {
+    "message": "登入入口網站",
+    "description": "Button to log in and stay in the portal"
+  },
+  "btnJumpToE3InPage": {
+    "message": "前往 E3",
+    "description": "Button to log in and redirect to E3"
+  },
+  "btnLoggingInToPortalInPage": {
+    "message": "登入中…",
+    "description": "Button status while logging in to the portal"
+  },
+  "btnJumpingToE3InPage": {
+    "message": "前往 E3 中…",
+    "description": "Button status while logging in and redirecting to E3"
+  },
   "msgSavedInPage": {
     "message": "帳密已儲存",
     "description": "Success message in-page"

@@ -21,6 +21,8 @@
     let navigationRecoveryListenersAttached = false;
     let setupCompletionFlowTriggered = false;
     let setupCompletionCheckInFlight = false;
+    const POST_LOGIN_TARGET_PORTAL = 'portal';
+    const POST_LOGIN_TARGET_E3 = 'e3';
     const FORCE_REDIRECT_AFTER_LOGIN_KEY = 'eze3_force_redirect_after_login';
     const FORCE_SETUP_2FA_AFTER_LOGIN_KEY = 'eze3_force_setup_2fa_after_login';
     const ONBOARDING_2FA_FLOW_KEY = 'eze3_onboarding_2fa_flow';
@@ -161,22 +163,22 @@
         }
     }
 
-    function configurePostLoginTarget(has2FASecret) {
+    function configurePostLoginTarget(has2FASecret, target = POST_LOGIN_TARGET_PORTAL) {
         e3RedirectTriggered = false;
         setOnboarding2FAFlowActive(!has2FASecret);
         setForceSetup2FAAfterLogin(!has2FASecret);
-        setForceRedirectAfterLogin(Boolean(has2FASecret));
+        setForceRedirectAfterLogin(Boolean(has2FASecret) && target === POST_LOGIN_TARGET_E3);
     }
 
-    function preparePostLoginTarget(onReady) {
+    function preparePostLoginTarget(target = POST_LOGIN_TARGET_PORTAL, onReady) {
         const ok = safeStorageGet([OTP_STORAGE_KEY], (result) => {
             const has2FASecret = Boolean(result[OTP_STORAGE_KEY]);
-            configurePostLoginTarget(has2FASecret);
+            configurePostLoginTarget(has2FASecret, target);
             if (onReady) onReady(has2FASecret);
         });
 
         if (!ok) {
-            configurePostLoginTarget(true);
+            configurePostLoginTarget(true, target);
             if (onReady) onReady(true);
         }
     }
@@ -887,12 +889,24 @@
         return;
     }
 
-    function fillLogin(username, password) {
+    function populateLoginFields(username, password) {
         const accountField = document.querySelector('#account');
         const passwordField = document.querySelector('#password');
-        const loginBtn = document.querySelector('button.carbon-button--primary');
 
         if (accountField && passwordField) {
+            accountField.value = username;
+            passwordField.value = password;
+
+            // Trigger input events to ensure the page's React/Vue/etc state updates
+            accountField.dispatchEvent(new Event('input', { bubbles: true }));
+            passwordField.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+    }
+
+    function fillLogin(username, password, target = POST_LOGIN_TARGET_PORTAL) {
+        const loginBtn = document.querySelector('button.carbon-button--primary');
+
+        if (document.querySelector('#account') && document.querySelector('#password')) {
             log('Initiating automation...');
             e3RedirectTriggered = false;
             if (isOnboarding2FAFlowActive()) {
@@ -900,14 +914,9 @@
                 setForceRedirectAfterLogin(false);
             } else {
                 setForceSetup2FAAfterLogin(false);
-                setForceRedirectAfterLogin(true);
+                setForceRedirectAfterLogin(target === POST_LOGIN_TARGET_E3);
             }
-            accountField.value = username;
-            passwordField.value = password;
-
-            // Trigger input events to ensure the page's React/Vue/etc state updates
-            accountField.dispatchEvent(new Event('input', { bubbles: true }));
-            passwordField.dispatchEvent(new Event('input', { bubbles: true }));
+            populateLoginFields(username, password);
 
             if (loginBtn) {
                 log('Authenticating...');
@@ -950,8 +959,8 @@
 
         // Dashboard redirection
         const isDashboard = currentHash === '' || currentHash === '#/' || currentHash === '#/home';
-        const shouldJumpToLinks = !forceSetup2FAAfterLogin && (isDashboard || forceRedirectAfterLogin);
-        if (shouldJumpToLinks && currentHash !== '#/links/nycu') {
+        const shouldJumpToLinks = !forceSetup2FAAfterLogin && forceRedirectAfterLogin;
+        if (shouldJumpToLinks && isDashboard && currentHash !== '#/links/nycu') {
             log('Session detected. Navigating to E3...');
             window.location.hash = '#/links/nycu';
             return;
@@ -1014,8 +1023,17 @@
         if (document.querySelector('#account')) {
             safeStorageGet(['nycu_username', 'nycu_password', OTP_STORAGE_KEY], (result) => {
                 if (result.nycu_username && result.nycu_password) {
-                    configurePostLoginTarget(Boolean(result[OTP_STORAGE_KEY]));
-                    fillLogin(result.nycu_username, result.nycu_password);
+                    const shouldResumeLogin = shouldForceRedirectAfterLogin() || shouldForceSetup2FAAfterLogin();
+                    populateLoginFields(result.nycu_username, result.nycu_password);
+                    if (shouldResumeLogin) {
+                        const target = shouldForceRedirectAfterLogin() ? POST_LOGIN_TARGET_E3 : POST_LOGIN_TARGET_PORTAL;
+                        configurePostLoginTarget(Boolean(result[OTP_STORAGE_KEY]), target);
+                        fillLogin(result.nycu_username, result.nycu_password, target);
+                    } else {
+                        injectSaveButton();
+                    }
+                } else {
+                    injectSaveButton();
                 }
             });
             return;
@@ -1034,13 +1052,32 @@
 
     function injectSaveButton() {
         const buttonGroup = document.querySelector('.button-group');
-        if (!buttonGroup || document.querySelector('#eze3-save-btn')) return;
+        if (!buttonGroup || document.querySelector('#eze3-portal-actions')) return;
 
         log('Injecting save button into portal...');
+
+        const actionWrap = document.createElement('div');
+        actionWrap.id = 'eze3-portal-actions';
 
         const saveBtn = document.createElement('button');
         saveBtn.id = 'eze3-save-btn';
         saveBtn.type = 'button';
+
+        const loginPortalBtn = document.createElement('button');
+        loginPortalBtn.id = 'eze3-login-btn';
+        loginPortalBtn.type = 'button';
+        loginPortalBtn.textContent = chrome.i18n.getMessage('btnLoginInPage');
+
+        const jumpToE3Btn = document.createElement('button');
+        jumpToE3Btn.id = 'eze3-jump-btn';
+        jumpToE3Btn.type = 'button';
+        jumpToE3Btn.textContent = chrome.i18n.getMessage('btnJumpToE3InPage');
+
+        const actionRow = document.createElement('div');
+        actionRow.className = 'eze3-portal-action-row';
+        actionRow.append(loginPortalBtn, jumpToE3Btn);
+
+        actionWrap.append(saveBtn, actionRow);
 
         const updateBtn = (text) => {
             saveBtn.innerHTML = `
@@ -1055,32 +1092,88 @@
             `;
         };
 
-        // Initial render
-        updateBtn(chrome.i18n.getMessage('btnSaveInPage'));
+        const resetActionLabels = () => {
+            updateBtn(chrome.i18n.getMessage('btnSaveInPage'));
+            loginPortalBtn.textContent = chrome.i18n.getMessage('btnLoginInPage');
+            jumpToE3Btn.textContent = chrome.i18n.getMessage('btnJumpToE3InPage');
+        };
 
-        saveBtn.onclick = () => {
+        const setButtonsDisabled = (disabled) => {
+            saveBtn.disabled = disabled;
+            loginPortalBtn.disabled = disabled;
+            jumpToE3Btn.disabled = disabled;
+        };
+
+        const getCredentialsFromForm = () => {
             const usernameInput = document.querySelector('#account');
             const passwordInput = document.querySelector('#password');
-            const username = usernameInput?.value.trim();
-            const password = passwordInput?.value;
+            return {
+                username: usernameInput?.value.trim() || '',
+                password: passwordInput?.value || ''
+            };
+        };
 
-            saveBtn.disabled = true;
-            updateBtn(chrome.i18n.getMessage('btnSaving'));
+        const showMissingFieldsState = (button) => {
+            const previousText = button.textContent;
+            button.textContent = chrome.i18n.getMessage('msgMissingFields');
+            setTimeout(() => {
+                if (!saveBtn.disabled) {
+                    resetActionLabels();
+                } else {
+                    button.textContent = previousText;
+                }
+            }, 1500);
+        };
 
+        const persistCredentials = ({ username, password }, onSaved) => {
             safeStorageSet({
                 nycu_username: username,
                 nycu_password: password
             }, (error) => {
                 if (error) {
                     updateBtn(chrome.i18n.getMessage('msgSaveFailed'));
-                    saveBtn.disabled = false;
+                    setButtonsDisabled(false);
                     return;
                 }
 
-                updateBtn(chrome.i18n.getMessage('msgSavedInPage')); // Keep orange
-                saveBtn.disabled = false;
-                
                 log('Credentials saved via in-page button.');
+                if (onSaved) onSaved();
+            });
+        };
+
+        const saveCurrentCredentials = () => {
+            const credentials = getCredentialsFromForm();
+            if (!credentials.username || !credentials.password) {
+                showMissingFieldsState(saveBtn);
+                return;
+            }
+
+            setButtonsDisabled(true);
+            updateBtn(chrome.i18n.getMessage('btnSaving'));
+
+            persistCredentials(credentials, () => {
+                updateBtn(chrome.i18n.getMessage('msgSavedInPage'));
+                setButtonsDisabled(false);
+            });
+        };
+
+        const loginWithTarget = (target) => {
+            const credentials = getCredentialsFromForm();
+            const triggerBtn = target === POST_LOGIN_TARGET_E3 ? jumpToE3Btn : loginPortalBtn;
+            if (!credentials.username || !credentials.password) {
+                showMissingFieldsState(triggerBtn);
+                return;
+            }
+
+            setButtonsDisabled(true);
+            if (target === POST_LOGIN_TARGET_E3) {
+                jumpToE3Btn.textContent = chrome.i18n.getMessage('btnJumpingToE3InPage');
+            } else {
+                loginPortalBtn.textContent = chrome.i18n.getMessage('btnLoggingInToPortalInPage');
+            }
+
+            persistCredentials(credentials, () => {
+                updateBtn(chrome.i18n.getMessage('msgSavedInPage'));
 
                 // Register the post-login navigation handler BEFORE clicking login
                 // so the hashchange that follows is captured.
@@ -1088,36 +1181,58 @@
                 ensurePostLoginObserver();
                 monitorFor2FA();
 
-                // Trigger login
                 setTimeout(() => {
-                    preparePostLoginTarget(() => {
-                        fillLogin(username, password);
+                    preparePostLoginTarget(target, () => {
+                        fillLogin(credentials.username, credentials.password, target);
                     });
                 }, 300);
             });
         };
 
+        saveBtn.onclick = saveCurrentCredentials;
+        loginPortalBtn.onclick = () => loginWithTarget(POST_LOGIN_TARGET_PORTAL);
+        jumpToE3Btn.onclick = () => loginWithTarget(POST_LOGIN_TARGET_E3);
+
+        // Initial render
+        resetActionLabels();
+
+        const usernameInput = document.querySelector('#account');
+        const passwordInput = document.querySelector('#password');
+        if (usernameInput) usernameInput.addEventListener('input', resetActionLabels);
+        if (passwordInput) passwordInput.addEventListener('input', resetActionLabels);
+
         // Use a MutationObserver to ensure the button group is ready and hasn't been wiped by React
         const observer = new MutationObserver(() => {
-            if (!document.querySelector('#eze3-save-btn')) {
+            if (!document.querySelector('#eze3-portal-actions')) {
                 const group = document.querySelector('.button-group');
-                if (group) group.prepend(saveBtn);
+                if (group && group.parentNode) {
+                    group.parentNode.insertBefore(actionWrap, group);
+                }
             }
         });
         observer.observe(document.body, { childList: true, subtree: true });
 
         // Initial attempt
-        buttonGroup.prepend(saveBtn);
+        if (buttonGroup.parentNode) {
+            buttonGroup.parentNode.insertBefore(actionWrap, buttonGroup);
+        }
     }
 
-    function startAutomation() {
+    function startAutomation(initialTarget = null) {
         attachNavigationRecoveryListeners();
 
         if (document.querySelector('#account')) {
             safeStorageGet(['nycu_username', 'nycu_password', OTP_STORAGE_KEY], (result) => {
                 if (result.nycu_username && result.nycu_password) {
-                    configurePostLoginTarget(Boolean(result[OTP_STORAGE_KEY]));
-                    fillLogin(result.nycu_username, result.nycu_password);
+                    populateLoginFields(result.nycu_username, result.nycu_password);
+                    if (initialTarget) {
+                        configurePostLoginTarget(Boolean(result[OTP_STORAGE_KEY]), initialTarget);
+                        fillLogin(result.nycu_username, result.nycu_password, initialTarget);
+                    } else {
+                        injectSaveButton();
+                    }
+                } else {
+                    injectSaveButton();
                 }
             });
         } else {

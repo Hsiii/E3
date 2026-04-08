@@ -59,6 +59,22 @@
     "message": "Save to EZE3",
     "description": "Button to save credentials in-page"
   },
+  "btnLoginInPage": {
+    "message": "Log In to Portal",
+    "description": "Button to log in and stay in the portal"
+  },
+  "btnJumpToE3InPage": {
+    "message": "Jump to E3",
+    "description": "Button to log in and redirect to E3"
+  },
+  "btnLoggingInToPortalInPage": {
+    "message": "Logging in...",
+    "description": "Button status while logging in to the portal"
+  },
+  "btnJumpingToE3InPage": {
+    "message": "Opening E3...",
+    "description": "Button status while logging in and redirecting to E3"
+  },
   "msgSavedInPage": {
     "message": "Credentials saved",
     "description": "Success message in-page"

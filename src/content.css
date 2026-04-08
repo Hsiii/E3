@@ -45,8 +45,23 @@
   margin-bottom: 12px;
 }
 
+#eze3-portal-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.eze3-portal-action-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
 #eze3-save-2fa-btn,
-#eze3-save-btn {
+#eze3-save-btn,
+#eze3-login-btn,
+#eze3-jump-btn {
   width: 100%;
   height: 48px;
   padding: 0 var(--eze3-button-padding-x);
@@ -64,8 +79,27 @@
   font-weight: 600;
 }
 
+#eze3-login-btn,
+#eze3-jump-btn {
+  justify-content: center;
+  text-align: center;
+}
+
 #eze3-save-btn:not(:disabled):hover {
   background-color: var(--eze3-color-accent-hover);
+}
+
+#eze3-login-btn:not(:disabled):hover,
+#eze3-jump-btn:not(:disabled):hover {
+  background-color: var(--eze3-color-accent-hover);
+}
+
+#eze3-save-2fa-btn:disabled,
+#eze3-save-btn:disabled,
+#eze3-login-btn:disabled,
+#eze3-jump-btn:disabled {
+  opacity: 0.72;
+  cursor: wait;
 }
 
 #eze3-save-btn .eze3-save-btn-label {
