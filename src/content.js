@@ -1306,6 +1306,11 @@
                 }
             });
         } else {
+            if (initialTarget === POST_LOGIN_TARGET_E3) {
+                setOnboarding2FAFlowActive(false);
+                setForceSetup2FAAfterLogin(false);
+                setForceRedirectAfterLogin(true);
+            }
             handlePostLogin();
         }
         monitorFor2FA();
