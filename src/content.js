@@ -1115,7 +1115,6 @@
         const jumpToE3Btn = document.createElement('button');
         jumpToE3Btn.id = 'eze3-jump-btn';
         jumpToE3Btn.type = 'button';
-        jumpToE3Btn.textContent = chrome.i18n.getMessage('btnJumpToE3InPage');
 
         const actionRow = document.createElement('div');
         actionRow.className = 'eze3-portal-action-row';
@@ -1138,7 +1137,14 @@
 
         const resetActionLabels = () => {
             updateBtn(chrome.i18n.getMessage('btnSaveInPage'));
-            jumpToE3Btn.textContent = chrome.i18n.getMessage('btnJumpToE3InPage');
+            jumpToE3Btn.innerHTML = `
+                <span class="eze3-action-btn-label">${chrome.i18n.getMessage('btnJumpToE3InPage')}</span>
+                <span class="eze3-action-btn-icon" aria-hidden="true">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="m9 18 6-6-6-6"></path>
+                    </svg>
+                </span>
+            `;
         };
 
         const setButtonsDisabled = (disabled) => {
@@ -1208,7 +1214,14 @@
             }
 
             setButtonsDisabled(true);
-            jumpToE3Btn.textContent = chrome.i18n.getMessage('btnJumpingToE3InPage');
+            jumpToE3Btn.innerHTML = `
+                <span class="eze3-action-btn-label">${chrome.i18n.getMessage('btnJumpingToE3InPage')}</span>
+                <span class="eze3-action-btn-icon" aria-hidden="true">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="m9 18 6-6-6-6"></path>
+                    </svg>
+                </span>
+            `;
 
             persistCredentials(credentials, () => {
                 updateBtn(chrome.i18n.getMessage('msgSavedInPage'));

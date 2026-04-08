@@ -76,11 +76,6 @@
   font-weight: 600;
 }
 
-#eze3-jump-btn {
-  justify-content: center;
-  text-align: center;
-}
-
 #eze3-save-btn:not(:disabled):hover {
   background-color: var(--eze3-color-accent-hover);
 }
@@ -102,6 +97,16 @@
 }
 
 #eze3-save-btn .eze3-save-btn-icon {
+  display: flex;
+  align-items: center;
+}
+
+#eze3-jump-btn .eze3-action-btn-label {
+  flex-grow: 1;
+  text-align: left;
+}
+
+#eze3-jump-btn .eze3-action-btn-icon {
   display: flex;
   align-items: center;
 }
