@@ -981,10 +981,8 @@
             return;
         }
 
-        // Dashboard redirection
-        const isDashboard = currentHash === '' || currentHash === '#/' || currentHash === '#/home';
         const shouldJumpToLinks = !forceSetup2FAAfterLogin && forceRedirectAfterLogin;
-        if (shouldJumpToLinks && isDashboard && currentHash !== '#/links/nycu') {
+        if (shouldJumpToLinks && currentHash !== '#/links/nycu') {
             log('Session detected. Navigating to E3...');
             window.location.hash = '#/links/nycu';
             return;
